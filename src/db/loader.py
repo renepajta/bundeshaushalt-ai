@@ -423,6 +423,53 @@ class DataLoader:
         return count
 
     # ------------------------------------------------------------------
+    # PDF Bookmarks (native or synthetic)
+    # ------------------------------------------------------------------
+
+    def load_bookmarks(self, year: int, source_pdf: str, entries: list[dict]) -> int:
+        """Load bookmark entries into pdf_bookmarks table.
+
+        Parameters
+        ----------
+        year:
+            Budget year.
+        source_pdf:
+            PDF filename.
+        entries:
+            List of dicts with keys: level, title, page_number,
+            einzelplan, kapitel, nav_type.
+
+        Returns
+        -------
+        int
+            Number of rows inserted.
+        """
+        count = 0
+        for e in entries:
+            try:
+                self.db.execute(
+                    """INSERT OR REPLACE INTO pdf_bookmarks
+                       (year, source_pdf, level, title, page_number,
+                        einzelplan, kapitel, nav_type)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        year,
+                        source_pdf,
+                        e["level"],
+                        e["title"],
+                        e["page_number"],
+                        e.get("einzelplan"),
+                        e.get("kapitel"),
+                        e.get("nav_type", "other"),
+                    ),
+                )
+                count += 1
+            except Exception as exc:
+                logger.warning("Bookmark insert failed: %s", exc)
+        self.db.commit()
+        return count
+
+    # ------------------------------------------------------------------
     # Source document registration
     # ------------------------------------------------------------------
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,8 +24,9 @@ from src.extract.pdf_extractor import PDFExtractor
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of page images per single scan request (GPT-4o limit).
-_MAX_PAGES_PER_SCAN = 5
+# Maximum number of page images per single scan request.
+# Bookmarks typically resolve to 1-5 pages; 20 is a generous safety cap.
+_MAX_PAGES_PER_SCAN = 20
 
 # Render resolution in DPI – 150 gives good readability without huge payloads.
 _RENDER_DPI = 150
@@ -169,44 +171,50 @@ class PageScanner:
     def _scan_pages(
         self, question: str, page_numbers: list[int]
     ) -> PageScanResult:
-        """Shared implementation for *scan* and *scan_for_table*."""
+        """Shared implementation with parallel page extraction."""
         if not page_numbers:
             raise ValueError("page_numbers darf nicht leer sein.")
 
         # Enforce the per-request image cap.
         if len(page_numbers) > _MAX_PAGES_PER_SCAN:
-            logger.warning(
+            logger.debug(
                 "Requested %d pages exceeds cap of %d – truncating.",
                 len(page_numbers),
                 _MAX_PAGES_PER_SCAN,
             )
             page_numbers = page_numbers[:_MAX_PAGES_PER_SCAN]
 
-        # 1. Extract text via PDFExtractor (0-indexed ranges).
-        page_texts: list[tuple[int, str]] = []
-        for pn in page_numbers:
-            pages = self._extractor.extract_pages(start=pn, end=pn + 1)
-            text = pages[0].text if pages else ""
-            page_texts.append((pn, text))
-
-        # 2. Render page images.
-        page_images: list[tuple[int, str]] = []
-        for pn in page_numbers:
+        # 1. Parallel extraction of text and page images.
+        def extract_page(pn: int) -> tuple[int, str, str | None]:
+            text_pages = self._extractor.extract_pages(start=pn, end=pn + 1)
+            text = text_pages[0].text if text_pages else ""
             try:
                 b64 = self._render_page_image(pn)
-                page_images.append((pn, b64))
             except Exception:
                 logger.warning(
-                    "Image rendering failed for page %d – falling back to text-only.",
+                    "Image rendering failed for page %d – text-only fallback.",
                     pn,
                     exc_info=True,
                 )
+                b64 = None
+            return pn, text, b64
 
-        # 3. Build multimodal prompt and call GPT-4o.
+        workers = min(len(page_numbers), 4)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(extract_page, page_numbers))
+
+        page_texts: list[tuple[int, str]] = []
+        page_images: list[tuple[int, str]] = []
+        for pn, text, b64 in results:
+            page_texts.append((pn, text))
+            if b64:
+                page_images.append((pn, b64))
+
+        # 2. Build multimodal prompt and call GPT-4o.
         messages = self._build_multimodal_prompt(question, page_texts, page_images)
         raw_answer = self._call_llm(messages)
 
-        # 4. Parse structured answer.
+        # 3. Parse structured answer.
         answer, confidence = self._parse_response(raw_answer)
 
         scanned_display = [pn + 1 for pn in page_numbers]  # 1-indexed for user

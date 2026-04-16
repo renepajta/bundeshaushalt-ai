@@ -104,9 +104,13 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": (
                 "Navigiere und lese den Bundeshaushalt wie ein erfahrener Sachbearbeiter. "
                 "Dies ist dein Hauptwerkzeug für ALLE Fragen. "
-                "Drei Navigationsmodi: "
-                "(1) SUCHE: search_term='Datenschutz' findet alle Seiten mit diesem Begriff. "
-                "(2) INHALTSVERZEICHNIS: year+einzelplan+kapitel navigiert zur richtigen Stelle. "
+                "Nutzt die PDF-Lesezeichen (Bookmarks) zur präzisen Navigation: "
+                "• 'Überblick zum Einzelplan 06' → springt direkt zur EP-Übersicht (1 Seite). "
+                "• 'Überblick zum Kapitel 0601' → springt zum Kapitel-Überblick (1-2 Seiten). "
+                "• Einzelne Titel (z.B. '531 01') → springt direkt zum Titel. "
+                "Drei Modi: "
+                "(1) STRUKTUR: year+einzelplan+kapitel+section_type navigiert via Bookmarks. "
+                "(2) SUCHE: search_term='Datenschutz' findet alle Seiten mit diesem Begriff. "
                 "(3) DIREKT: page_numbers=[142,143] springt zu bekannten Seiten. "
                 "Liest die gefundenen Seiten visuell und extrahiert präzise Zahlen, "
                 "Tabellen, Erläuterungen und Haushaltsvermerke direkt aus dem Original."
@@ -499,96 +503,97 @@ class QueryEngine:
                         kapitel = org.get('kapitel')
             return self._search_and_scan(question, search_term, year, einzelplan, kapitel, section_type, locator)
 
-        # STRATEGY 3: Hierarchical TOC lookup — clerk checks Table of Contents
-        return self._toc_navigate_and_scan(question, year, einzelplan, kapitel, section_type, locator)
+        # STRATEGY 3: Bookmark navigation — clerk checks PDF bookmarks
+        return self._bookmark_navigate(question, year, einzelplan, kapitel, section_type, locator)
 
     # ------------------------------------------------------------------
-    # Hierarchical TOC navigation
+    # Bookmark-based navigation (replaces old TOC lookup)
     # ------------------------------------------------------------------
 
-    def _toc_navigate_and_scan(self, question, year, einzelplan, kapitel, section_type, locator):
-        """Navigate via hierarchical TOC: EP → Kapitel → Section → 1-3 pages."""
+    def _bookmark_navigate(self, question, year, einzelplan, kapitel, section_type, locator):
+        """Navigate via PDF bookmarks — the clerk's bookmark ribbons."""
         from src.db.schema import get_connection
 
         conn = get_connection(config.DB_PATH)
         try:
-            # Level 1: section_type + kapitel → most precise (1-3 pages)
+            pages = []
+            pdf_name = None
+
+            # Strategy 1: Specific nav_type + kapitel (most precise)
             if kapitel and section_type:
+                nav_map = {
+                    'ueberblick': 'kap_ueberblick',
+                    'personal': 'personal',
+                    've': 'titel',  # VE are under titel bookmarks
+                    'vermerk': 'haushaltsvermerk',
+                    'erlaeuterung': 'erlaeuterung',
+                }
+                bm_type = nav_map.get(section_type, section_type)
                 rows = conn.execute(
-                    "SELECT source_pdf, page_start, page_end FROM budget_toc "
-                    "WHERE year=? AND kapitel=? AND section_type=? AND level='section' "
-                    "ORDER BY page_start LIMIT 3",
-                    (year, kapitel, section_type)
+                    "SELECT source_pdf, page_number FROM pdf_bookmarks "
+                    "WHERE year=? AND kapitel=? AND nav_type=? "
+                    "ORDER BY page_number LIMIT 5",
+                    (year, kapitel, bm_type)
                 ).fetchall()
                 if rows:
-                    return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
+                    pdf_name = rows[0][0]
+                    pages = [r[1] for r in rows]
 
-            # Level 2: kapitel only → find section-level pages within Kapitel
-            if kapitel:
-                # Try section-level entries first (most precise)
+            # Strategy 2: Kapitel overview
+            if not pages and kapitel:
                 rows = conn.execute(
-                    "SELECT source_pdf, page_start, page_start FROM budget_toc "
-                    "WHERE year=? AND kapitel=? AND level='section' "
-                    "ORDER BY page_start LIMIT 5",
+                    "SELECT source_pdf, page_number FROM pdf_bookmarks "
+                    "WHERE year=? AND kapitel=? AND nav_type IN ('kap_ueberblick', 'kap_title') "
+                    "ORDER BY page_number LIMIT 3",
                     (year, kapitel)
                 ).fetchall()
-                if not rows:
-                    # Fallback to kapitel-level range but cap at first 5 pages
-                    rows = conn.execute(
-                        "SELECT source_pdf, page_start, MIN(page_start + 4, page_end) FROM budget_toc "
-                        "WHERE year=? AND kapitel=? AND level='kapitel' "
-                        "ORDER BY page_start LIMIT 1",
-                        (year, kapitel)
-                    ).fetchall()
                 if rows:
-                    return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
+                    pdf_name = rows[0][0]
+                    pages = [r[1] for r in rows]
 
-            # Level 3: einzelplan + section_type → first matching section in EP
-            if einzelplan and section_type:
+            # Strategy 3: EP + section_type
+            if not pages and einzelplan and section_type:
                 rows = conn.execute(
-                    "SELECT source_pdf, page_start, page_start FROM budget_toc "
-                    "WHERE year=? AND einzelplan=? AND section_type=? AND level='section' "
-                    "ORDER BY page_start LIMIT 3",
-                    (year, einzelplan, section_type)
+                    "SELECT source_pdf, page_number FROM pdf_bookmarks "
+                    "WHERE year=? AND einzelplan=? AND nav_type=? "
+                    "ORDER BY page_number LIMIT 3",
+                    (year, einzelplan, section_type if section_type != 'ueberblick' else 'ep_ueberblick')
                 ).fetchall()
                 if rows:
-                    return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
+                    pdf_name = rows[0][0]
+                    pages = [r[1] for r in rows]
 
-            # Level 4: einzelplan only → EP Überblick (first summary page only)
-            if einzelplan:
-                # First try: first ueberblick section (EP-level summary, not per-Kapitel)
+            # Strategy 4: EP overview (default to ep_ueberblick)
+            if not pages and einzelplan:
                 rows = conn.execute(
-                    "SELECT source_pdf, page_start, page_start FROM budget_toc "
-                    "WHERE year=? AND einzelplan=? AND section_type='ueberblick' AND level='section' "
-                    "ORDER BY page_start LIMIT 1",
+                    "SELECT source_pdf, page_number FROM pdf_bookmarks "
+                    "WHERE year=? AND einzelplan=? AND nav_type='ep_ueberblick' "
+                    "ORDER BY page_number LIMIT 1",
                     (year, einzelplan)
                 ).fetchall()
                 if rows:
-                    return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
-                # Fallback: first pages of the EP
+                    pdf_name = rows[0][0]
+                    pages = [r[1] for r in rows]
+
+            # Strategy 5: Gesamtplan
+            if not pages:
                 rows = conn.execute(
-                    "SELECT source_pdf, page_start, page_end FROM budget_toc "
-                    "WHERE year=? AND einzelplan=? AND level='ep' "
-                    "ORDER BY page_start LIMIT 1",
-                    (year, einzelplan)
+                    "SELECT source_pdf, page_number FROM pdf_bookmarks "
+                    "WHERE year=? AND nav_type='gesamtplan' "
+                    "ORDER BY page_number LIMIT 3",
+                    (year,)
                 ).fetchall()
                 if rows:
-                    r = rows[0]
-                    rows = [(r[0], r[1], min(r[1] + 4, r[2]))]
-                    return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
-
-            # Level 5: Year only → Gesamtplan overview
-            rows = conn.execute(
-                "SELECT source_pdf, page_start, page_end FROM budget_toc "
-                "WHERE year=? AND section_type='gesamtplan' AND level='section' "
-                "ORDER BY page_start LIMIT 3",
-                (year,)
-            ).fetchall()
-            if rows:
-                return self._scan_toc_result(question, rows, year, einzelplan, kapitel, locator)
+                    pdf_name = rows[0][0]
+                    pages = [r[1] for r in rows]
 
         finally:
             conn.close()
+
+        if pages and pdf_name:
+            pdf_path = locator.get_pdf_path(year, pdf_name)
+            if pdf_path and pdf_path.exists():
+                return self._scan_and_cite(question, pdf_path, pages, year, einzelplan, kapitel)
 
         # Fallback: FTS5 grep for Kapitel/EP number in page text
         if kapitel or einzelplan:
@@ -627,39 +632,6 @@ class QueryEngine:
                 return self._scan_and_cite(question, pdf_path, pages, year, einzelplan, kapitel)
 
         return f"Keine relevanten Seiten für Jahr {year}, EP {einzelplan}, Kap {kapitel} gefunden.", []
-
-    def _scan_toc_result(self, question, toc_rows, year, einzelplan, kapitel, locator):
-        """Scan pages from TOC lookup results.
-        
-        Smart page collection:
-        - For small ranges (≤5 pages): include all pages in range
-        - For large ranges (>5 pages): take only the start page (section header)
-          plus up to 4 subsequent pages
-        This avoids scanning 100+ page ranges when a section spans many pages.
-        """
-        all_pages: list[int] = []
-        pdf_name = toc_rows[0][0]
-        for _, page_start, page_end in toc_rows:
-            span = page_end - page_start + 1
-            if span <= 5:
-                # Small range — include all pages
-                for p in range(page_start, page_end + 1):
-                    if p not in all_pages:
-                        all_pages.append(p)
-            else:
-                # Large range — take start page + up to 4 more
-                for p in range(page_start, min(page_start + 5, page_end + 1)):
-                    if p not in all_pages:
-                        all_pages.append(p)
-            if len(all_pages) >= 8:
-                all_pages = all_pages[:8]
-                break
-
-        pdf_path = locator.get_pdf_path(year, pdf_name)
-        if not pdf_path or not pdf_path.exists():
-            return f"PDF nicht gefunden: {pdf_name}", []
-
-        return self._scan_and_cite(question, pdf_path, all_pages, year, einzelplan, kapitel)
 
     # ------------------------------------------------------------------
     # FTS5 search with smart ranking

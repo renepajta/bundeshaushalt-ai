@@ -158,6 +158,22 @@ CREATE TABLE IF NOT EXISTS page_index (
     UNIQUE(year, source_pdf, page_number)
 );
 
+-- PDF bookmarks (native or synthetic)
+CREATE TABLE IF NOT EXISTS pdf_bookmarks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    year        INTEGER NOT NULL,
+    source_pdf  TEXT NOT NULL,
+    level       INTEGER NOT NULL,     -- bookmark depth (1-8)
+    title       TEXT NOT NULL,        -- bookmark text
+    page_number INTEGER NOT NULL,     -- 1-indexed
+    einzelplan  TEXT,                 -- derived from hierarchy context
+    kapitel     TEXT,                 -- derived from hierarchy context
+    nav_type    TEXT,                 -- 'ep_title', 'ep_ueberblick', 'kap_title', 'kap_ueberblick',
+                                     -- 'vorbemerkung', 'haushaltsvermerk', 'einnahmen', 'ausgaben',
+                                     -- 'titel', 'personal', 'erlaeuterung', 'other'
+    UNIQUE(year, source_pdf, level, title, page_number)
+);
+
 -- Hierarchical Table of Contents (structured 3-level navigation index)
 CREATE TABLE IF NOT EXISTS budget_toc (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,6 +283,13 @@ CREATE INDEX IF NOT EXISTS idx_toc_year_kap
     ON budget_toc (year, kapitel);
 CREATE INDEX IF NOT EXISTS idx_toc_level
     ON budget_toc (year, level);
+
+-- pdf_bookmarks indexes
+CREATE INDEX IF NOT EXISTS idx_bm_year ON pdf_bookmarks (year);
+CREATE INDEX IF NOT EXISTS idx_bm_ep ON pdf_bookmarks (year, einzelplan);
+CREATE INDEX IF NOT EXISTS idx_bm_kap ON pdf_bookmarks (year, kapitel);
+CREATE INDEX IF NOT EXISTS idx_bm_nav ON pdf_bookmarks (year, nav_type);
+CREATE INDEX IF NOT EXISTS idx_bm_title ON pdf_bookmarks (year, title);
 """
 
 # Ordered list of all application tables (used by reset_db).
@@ -284,6 +307,7 @@ _ALL_TABLES = [
     "page_text",
     "page_index",
     "budget_toc",
+    "pdf_bookmarks",
 ]
 
 # ---------------------------------------------------------------------------

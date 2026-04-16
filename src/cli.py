@@ -467,6 +467,26 @@ def cmd_ingest_all(args: argparse.Namespace) -> None:
                             pdf_path.name, toc_exc,
                         )
 
+                    # Extract bookmarks (native or synthetic)
+                    try:
+                        from src.extract.bookmark_extractor import BookmarkExtractor
+
+                        bm_extractor = BookmarkExtractor()
+                        bookmarks = bm_extractor.extract(pdf_path, year)
+                        if bookmarks:
+                            bm_count = loader.load_bookmarks(
+                                year, pdf_path.name, bookmarks
+                            )
+                            logging.getLogger(__name__).info(
+                                "Bookmarks: %d for %s",
+                                bm_count, pdf_path.name,
+                            )
+                    except Exception as bm_exc:
+                        logging.getLogger(__name__).warning(
+                            "Bookmark extraction failed for %s: %s",
+                            pdf_path.name, bm_exc,
+                        )
+
                     yr_source_docs += 1
                     yr_pdfs_ok += 1
 
