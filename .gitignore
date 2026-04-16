@@ -1,0 +1,21 @@
+# Bundeshaushalt Q&A
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/budgets/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+test_schema_verify.db
+.pytest_cache/
+*.tmp
+_*.py
+docs/0350-25.pdf
+docs/Architektur_Haushaltsdatenanalyse.pdf
+docs/Architektur_Haushaltsdatenanalyse.pptx

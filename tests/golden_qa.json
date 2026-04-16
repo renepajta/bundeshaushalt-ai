@@ -1,0 +1,213 @@
+[
+  {
+    "id": "q01",
+    "question": "Wie fällt die prozentuale Veränderung der Ausgaben von 2021 auf 2022 für den Einzelplan 6 aus, wenn man Verrechnungstitel nicht berücksichtigt?",
+    "expected_answer": "Ausgaben ohne Verrechnungstitel 2021: 16.161.139k, 2022: 13.717.181k → -15,12%",
+    "key_figures": {
+      "ausgaben_2021": 16161139,
+      "ausgaben_2022": 13717181,
+      "veraenderung_prozent": -15.12
+    },
+    "category": "year_comparison",
+    "difficulty": "medium",
+    "data_requirements": ["haushaltsdaten"]
+  },
+  {
+    "id": "q02",
+    "question": "Wie groß ist die Differenz zwischen Soll und Ist für das 2023 und Einzelplan 14, wenn man Verrechnungstitel nicht berücksichtigt? Was bedeutet das für die Ausschöpfung prozentual?",
+    "expected_answer": "Ist: 51.132.650k, Soll: 50.117.445k, Differenz: 1.015.205k, Ausschöpfung: 102,03%",
+    "key_figures": {
+      "ist": 51132650,
+      "soll": 50117445,
+      "differenz": 1015205,
+      "ausschoepfung_prozent": 102.03
+    },
+    "category": "soll_ist_comparison",
+    "difficulty": "medium",
+    "data_requirements": ["haushaltsdaten", "ist_ergebnisse"]
+  },
+  {
+    "id": "q03",
+    "question": "Welchen Anteil machen die beschlossenen Soll-Ausgaben des Kapitel 1101 im Vergleich zum Bruttoinlandsprodukt 2025 aus?",
+    "expected_answer": "Ausgaben: 54.820.073k, BIP: 4.469.910.000k → 1,23%",
+    "key_figures": {
+      "ausgaben": 54820073,
+      "bip": 4469910000,
+      "anteil_prozent": 1.23
+    },
+    "category": "ratio_calculation",
+    "difficulty": "medium",
+    "data_requirements": ["haushaltsdaten", "referenzdaten"]
+  },
+  {
+    "id": "q04",
+    "question": "Vergleiche die nominalen Sollwerte (Ausgaben) des Bundeshaushalts 2024 mit den inflationsbereinigten Realwerten im Bezugsjahr 2022? Was ist die Differenz absolut und prozentual?",
+    "expected_answer": "Nominalwert 476.807.656k, Realwert mit Bezugsjahr 2022: 440.437.583k, Differenz absolut: -36.370.073k, prozentual: -7,6%",
+    "key_figures": {
+      "nominalwert": 476807656,
+      "realwert": 440437583,
+      "differenz": -36370073,
+      "differenz_prozent": -7.6
+    },
+    "category": "inflation_adjustment",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "referenzdaten", "inflationsdaten"]
+  },
+  {
+    "id": "q05",
+    "question": "Wie viele Planstellen für Reservedienstleistende gab es im Jahr 2012 und welchem Kapitel sind sie zugeordnet?",
+    "expected_answer": "2500, Kapitel 1403 (2012 hießen sie allerdings noch Wehrübende)",
+    "key_figures": {
+      "planstellen": 2500,
+      "kapitel": "1403"
+    },
+    "category": "personnel_lookup",
+    "difficulty": "simple",
+    "data_requirements": ["personalhaushalt"]
+  },
+  {
+    "id": "q06",
+    "question": "Welchem Kapitel ist der/die Bundesbeauftragte für den Datenschutz und die Informationsfreiheit zwischen 2005 und 2026 zugeordnet?",
+    "expected_answer": "2005: Kapitel 0607 (Text nur 'Bundesbeauftragten für den Datenschutz'), 2006-2013: Kapitel 0607, 2014-2016: Kapitel 0613, 2016-2024: Kapitel 2112, 2025-2026: Kapitel 2112 unter neuem Kapitel-Text",
+    "key_figures": {
+      "zuordnungen": [
+        {"years": "2005", "kapitel": "0607"},
+        {"years": "2006-2013", "kapitel": "0607"},
+        {"years": "2014-2016", "kapitel": "0613"},
+        {"years": "2016-2024", "kapitel": "2112"},
+        {"years": "2025-2026", "kapitel": "2112"}
+      ]
+    },
+    "category": "historical_tracking",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "kapitelverzeichnis"]
+  },
+  {
+    "id": "q07",
+    "question": "Was verbirgt sich inhaltlich hinter Kapitel 1201 zwischen 2005 und 2026?",
+    "expected_answer": "Von 2005-2015 ist dieses Kapitel dem Bundesministerium zugeordnet, ab 2016 sind dort die Bundesfernstraßen ausgeplant",
+    "key_figures": {},
+    "category": "historical_tracking",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "kapitelverzeichnis"]
+  },
+  {
+    "id": "q08",
+    "question": "In welchem Bereich verändern sich die Ausgaben des Kapitels 0111 im Jahr 2024 im ersten Entwurf gegenüber dem Beschluss?",
+    "expected_answer": "Personalausgaben, konkret Titel 431 57",
+    "key_figures": {
+      "bereich": "Personalausgaben",
+      "titel": "431 57"
+    },
+    "category": "version_comparison",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "versionsvergleich"]
+  },
+  {
+    "id": "q09",
+    "question": "Wie viel Ausgabenvolumen steht im Kapitel 1403 dem Titel 531 01 im Jahr 2024 zur Verfügung, wenn man auch deckungsfähige Titel berücksichtigt?",
+    "expected_answer": "5+30",
+    "key_figures": {
+      "volumen_titel": 5,
+      "volumen_deckungsfaehig": 30,
+      "gesamt": 35
+    },
+    "category": "deckungsfaehigkeit",
+    "difficulty": "advanced",
+    "data_requirements": ["haushaltsdaten", "deckungsfaehigkeit"]
+  },
+  {
+    "id": "q10",
+    "question": "In welcher Haushaltsversion änderte sich erstmals die Flexibilisierung des Titels 53101 im Kap. 415?",
+    "expected_answer": "2024.0.1 Beschluss",
+    "key_figures": {
+      "version": "2024.0.1",
+      "typ": "Beschluss"
+    },
+    "category": "version_tracking",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "versionsvergleich", "flexibilisierung"]
+  },
+  {
+    "id": "q11",
+    "question": "Welcher Titel kam 2026 erstmalig im Einzelplan 04 vor und war bisher nur in anderen zu finden? In welchen?",
+    "expected_answer": "Titel 88221 (neu in Kapitel 0416, bisher in Epl 05, 06, 10, 12)",
+    "key_figures": {
+      "titel": "88221",
+      "neues_kapitel": "0416",
+      "bisherige_einzelplaene": ["05", "06", "10", "12"]
+    },
+    "category": "cross_reference",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "titelverzeichnis"]
+  },
+  {
+    "id": "q12",
+    "question": "In welcher Höhe hat das Kapitel 0622 im Jahr 2020 Verpflichtungsermächtigungen und wann sind diese fällig?",
+    "expected_answer": "21865, fällig in 2021: 11320, 2022: 8620, 2023: 1590, Folgejahre: 335",
+    "key_figures": {
+      "gesamt": 21865,
+      "faelligkeit": {
+        "2021": 11320,
+        "2022": 8620,
+        "2023": 1590,
+        "folgejahre": 335
+      }
+    },
+    "category": "verpflichtungsermachtigungen",
+    "difficulty": "medium",
+    "data_requirements": ["verpflichtungsermachtigungen"]
+  },
+  {
+    "id": "q13",
+    "question": "Wie viele Planstellen hat Kapitel 0455 Titel 428 01 im Jahr 2020 und wie teilen sich diese auf in tariflich und außertariflich?",
+    "expected_answer": "1124 tarifliche, 1 außertariflich, insgesamt 1125",
+    "key_figures": {
+      "tariflich": 1124,
+      "aussertariflich": 1,
+      "gesamt": 1125
+    },
+    "category": "personnel_detail",
+    "difficulty": "simple",
+    "data_requirements": ["personalhaushalt"]
+  },
+  {
+    "id": "q14",
+    "question": "Wie setzt sich das Soll 2020 im Kapitel 0719 Titel F 811 01 – 059 zusammen? Betrachte Erstbeschaffung und Ersatzbeschaffungen",
+    "expected_answer": "insgesamt 26, Erstbeschaffung 26, Ersatzbeschaffung 41, abzüglich Mehreinnahmen -41",
+    "key_figures": {
+      "gesamt": 26,
+      "erstbeschaffung": 26,
+      "ersatzbeschaffung": 41,
+      "mehreinnahmen": -41
+    },
+    "category": "detail_breakdown",
+    "difficulty": "advanced",
+    "data_requirements": ["haushaltsdaten", "erlaeuterungen"]
+  },
+  {
+    "id": "q15",
+    "question": "Wie viele ORR-Planstellen gibt es im Jahr 2024 im Kapitel 1513 in TGr 05?",
+    "expected_answer": "3",
+    "key_figures": {
+      "planstellen": 3,
+      "besoldungsgruppe": "ORR",
+      "titelgruppe": "05"
+    },
+    "category": "personnel_lookup",
+    "difficulty": "simple",
+    "data_requirements": ["personalhaushalt"]
+  },
+  {
+    "id": "q16",
+    "question": "Welchen Titel gab es in 2024 nur im Beschluss, nicht aber im Entwurf?",
+    "expected_answer": "Kap. 1010, Titel 68607",
+    "key_figures": {
+      "kapitel": "1010",
+      "titel": "68607"
+    },
+    "category": "version_comparison",
+    "difficulty": "complex",
+    "data_requirements": ["haushaltsdaten", "versionsvergleich"]
+  }
+]
