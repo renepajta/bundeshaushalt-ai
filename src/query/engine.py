@@ -53,8 +53,12 @@ Du beantwortest Fragen zum Bundeshaushalt, indem du die Original-Dokumente liest
 Du hast drei Werkzeuge:
 1. read_document — Bundeshaushalt-Dokument öffnen und lesen (dein Hauptwerkzeug)
 2. compute — Taschenrechner für exakte Berechnungen
-3. lookup_reference — Nachschlagewerk für volkswirtschaftliche Daten (dein Statistisches Jahrbuch)
-   Enthält: BIP, Inflationsrate, BIP-Deflator für alle Jahre
+3. lookup_reference — Nachschlagewerk für volkswirtschaftliche Daten
+   Datenquellen (in dieser Reihenfolge):
+   a) Lokale Datenbank (sofort verfügbar)
+   b) GENESIS-Online — das Statistikportal des Statistischen Bundesamts (destatis.de)
+   c) Weitere vertrauenswürdige Quellen: Bundesbank, Wikipedia
+   Enthält: BIP, Inflationsrate, BIP-Deflator, Bevölkerung für alle Jahre
    Nutze für: Inflationsbereinigungen, BIP-Vergleiche, Ausgabenquoten
 
 ARBEITSWEISE (wie ein Sachbearbeiter):
@@ -232,8 +236,9 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": (
                 "Nachschlagewerk für volkswirtschaftliche Referenzdaten "
                 "(BIP, Inflationsrate, BIP-Deflator, Bevölkerung). "
-                "Prüft zuerst die lokale Datenbank, dann vertrauenswürdige "
-                "öffentliche Quellen (Statistisches Bundesamt, Bundesbank). "
+                "Prüft zuerst die lokale Datenbank, dann GENESIS-Online "
+                "(das Statistikportal des Statistischen Bundesamts / Destatis), "
+                "dann vertrauenswürdige Quellen (Bundesbank, Wikipedia). "
                 "Nutze dies für Inflationsbereinigungen, BIP-Vergleiche "
                 "und andere makroökonomische Berechnungen."
             ),
@@ -552,7 +557,8 @@ class QueryEngine:
 
         Strategy:
         1. Check local referenzdaten table first (instant)
-        2. If not found → use LLM knowledge of trusted government sources
+        2. Try GENESIS-Online API (Destatis) if credentials are configured
+        3. Fall back to LLM knowledge citing trusted government sources
         """
         from src.db.schema import get_connection
 
@@ -594,7 +600,20 @@ class QueryEngine:
                     + "\n".join(result_lines)
                 )
 
-            # Step 2: Web search on trusted sources
+            # Step 2: Try GENESIS-Online API (Destatis)
+            try:
+                from src.query.genesis_client import GenesisClient
+                genesis = GenesisClient()
+                if genesis.available:
+                    genesis_result = genesis.lookup(
+                        indicator, year=year, year_range=year_range
+                    )
+                    if genesis_result:
+                        return genesis_result
+            except Exception as exc:
+                logger.debug("GENESIS lookup skipped: %s", exc)
+
+            # Step 3: LLM knowledge with trusted source guidance
             return self._web_lookup_reference(indicator, years)
 
         finally:
@@ -633,13 +652,16 @@ class QueryEngine:
                 f"Was ist der Wert für '{indicator}' in Deutschland"
                 f"{year_str}? "
                 f"Antworte NUR mit dem Zahlenwert und der Quelle. "
-                f"Verwende nur offizielle Quellen (Statistisches Bundesamt, Bundesbank). "
+                f"Verwende nur offizielle und vertrauenswürdige Quellen: "
+                f"GENESIS-Online (destatis.de), Statistisches Bundesamt, "
+                f"Deutsche Bundesbank, oder Wikipedia (für Kontextdaten). "
                 f"Format: WERT: <zahl>\nQUELLE: <quelle>\n"
                 f"Wenn du den Wert nicht sicher weißt, sage 'UNBEKANNT'."
             )
             response = llm.chat_with_system(
                 "Du bist ein Statistik-Experte. Antworte nur mit verifizierten Daten "
-                "vom Statistischen Bundesamt oder der Deutschen Bundesbank.",
+                "vom Statistischen Bundesamt (GENESIS-Online), der Deutschen Bundesbank, "
+                "oder zuverlässigen Nachschlagewerken wie Wikipedia.",
                 prompt,
                 temperature=0.0,
             )
@@ -649,13 +671,16 @@ class QueryEngine:
                     f"Referenzdaten für {indicator}{year_str} (Web-Recherche):\n"
                     f"{response}\n\n"
                     f"Hinweis: Bitte verifizieren Sie diesen Wert über "
-                    f"destatis.de oder bundesbank.de."
+                    f"GENESIS-Online (www-genesis.destatis.de), destatis.de, "
+                    f"bundesbank.de oder Wikipedia."
                 )
             else:
                 return (
                     f"Der Wert für {indicator}{year_str} konnte nicht aus "
                     f"vertrauenswürdigen Quellen ermittelt werden. "
-                    f"Bitte prüfen Sie destatis.de oder bundesbank.de."
+                    f"Mögliche Quellen zur manuellen Prüfung: "
+                    f"GENESIS-Online (www-genesis.destatis.de), destatis.de, "
+                    f"bundesbank.de oder Wikipedia."
                 )
 
         except Exception as exc:

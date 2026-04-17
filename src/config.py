@@ -26,6 +26,11 @@ class Config:
     DATA_DIR: Path = _PROJECT_ROOT / os.getenv("DATA_DIR", "data")
     DB_PATH: Path = _PROJECT_ROOT / os.getenv("DATA_DIR", "data") / "bundeshaushalt.db"
 
+    # GENESIS-Online API (optional — enables macroeconomic data lookups)
+    GENESIS_API_TOKEN: str = os.getenv("GENESIS_API_TOKEN", "")
+    GENESIS_USERNAME: str = os.getenv("GENESIS_USERNAME", "")
+    GENESIS_PASSWORD: str = os.getenv("GENESIS_PASSWORD", "")
+
     @classmethod
     def validate(cls) -> list[str]:
         """Return list of missing required config values."""

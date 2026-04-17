@@ -283,7 +283,69 @@ class TestDataLoader(unittest.TestCase):
 
 
 # ===================================================================
-# 3. Golden Q&A Structure Test
+# 3. GENESIS-Online Client Tests
+# ===================================================================
+
+
+class TestGenesisClient(unittest.TestCase):
+    """Test GenesisClient functionality."""
+
+    def test_import(self):
+        """GenesisClient module can be imported."""
+        from src.query.genesis_client import GenesisClient
+        client = GenesisClient()
+        self.assertIsInstance(client.available, bool)
+
+    def test_format_result_parses_ffcsv(self):
+        """_format_result extracts values from ffcsv-style data."""
+        from src.query.genesis_client import GenesisClient
+
+        csv_text = (
+            "Zeit;Zeit_Label;Merkmal;Auspraegung;Wert\n"
+            '2022;"2022";"BIP";"nominal";"3876,81"\n'
+            '2023;"2023";"BIP";"nominal";"4121,16"\n'
+        )
+        table_info = {
+            "table": "81000-0001",
+            "description": "Bruttoinlandsprodukt (nominal)",
+            "unit": "Mrd. €",
+            "value_hint": "jeweiligen Preisen",
+        }
+        result = GenesisClient._format_result("BIP", csv_text, table_info, [2023])
+        self.assertIsNotNone(result)
+        self.assertIn("2023", result)
+        self.assertIn("GENESIS-Online", result)
+
+    def test_format_result_empty_csv(self):
+        """_format_result returns None for empty/header-only CSV."""
+        from src.query.genesis_client import GenesisClient
+
+        result = GenesisClient._format_result("BIP", "header\n", {
+            "table": "x", "description": "x", "unit": "", "value_hint": ""
+        }, [2023])
+        self.assertIsNone(result)
+
+    def test_lookup_without_credentials_returns_none(self):
+        """lookup() returns None when no GENESIS credentials are configured."""
+        from src.query.genesis_client import GenesisClient
+        client = GenesisClient()
+        if not client.available:
+            result = client.lookup("BIP", year=2023)
+            self.assertIsNone(result)
+
+    def test_search_tables_returns_list(self):
+        """search_tables() returns a list (may be empty if API is down)."""
+        from src.query.genesis_client import GenesisClient
+        client = GenesisClient()
+        try:
+            results = client.search_tables("Bruttoinlandsprodukt", limit=2)
+            self.assertIsInstance(results, list)
+        except Exception:
+            pass  # API may be unreachable in CI
+
+
+# ===================================================================
+# 4. Golden Q&A Structure Test
 # ===================================================================
 
 
