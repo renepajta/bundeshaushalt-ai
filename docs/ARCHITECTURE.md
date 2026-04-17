@@ -27,7 +27,7 @@ and how many times — before synthesising a final German-language answer.
 ## 2  Project Structure
 
 ```
-itzbund-bundestag/
+bundeshaushalt-ai/
 ├── src/
 │   ├── cli.py                  # CLI entry point — all user commands
 │   ├── config.py               # Configuration (env vars, paths)
