@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,6 +31,27 @@ _MAX_PAGES_PER_SCAN = 20
 
 # Render resolution in DPI – 150 gives good readability without huge payloads.
 _RENDER_DPI = 150
+
+# ---------------------------------------------------------------------------
+# Module-level PDF handle cache (avoids reopening 3000-page files)
+# ---------------------------------------------------------------------------
+
+_pdf_cache: dict[str, fitz.Document] = {}
+_pdf_cache_lock = threading.Lock()
+_PDF_CACHE_MAX = 10
+
+
+def _get_cached_doc(pdf_path: str) -> fitz.Document:
+    """Get or open a cached PDF document handle."""
+    with _pdf_cache_lock:
+        if pdf_path not in _pdf_cache:
+            _pdf_cache[pdf_path] = fitz.open(pdf_path)
+            # Evict oldest entry when cache is full
+            if len(_pdf_cache) > _PDF_CACHE_MAX:
+                oldest = next(iter(_pdf_cache))
+                _pdf_cache[oldest].close()
+                del _pdf_cache[oldest]
+        return _pdf_cache[pdf_path]
 
 # ---------------------------------------------------------------------------
 # System prompt (German, budget-specific)
@@ -125,7 +147,8 @@ class PageScanner:
     # ------------------------------------------------------------------
 
     def scan(
-        self, question: str, start_page: int, end_page: int
+        self, question: str, start_page: int, end_page: int,
+        text_only: bool = False,
     ) -> PageScanResult:
         """Analyse a contiguous range of pages with text + images.
 
@@ -138,16 +161,19 @@ class PageScanner:
         end_page:
             Exclusive upper bound (0-indexed), i.e. pages
             ``[start_page, end_page)`` are scanned.
+        text_only:
+            If ``True``, skip image rendering (faster for overview pages).
 
         Returns
         -------
         PageScanResult
         """
         page_numbers = list(range(start_page, end_page))
-        return self._scan_pages(question, page_numbers)
+        return self._scan_pages(question, page_numbers, text_only=text_only)
 
     def scan_for_table(
-        self, question: str, page_numbers: list[int]
+        self, question: str, page_numbers: list[int],
+        text_only: bool = False,
     ) -> PageScanResult:
         """Scan specific (possibly non-contiguous) pages for table data.
 
@@ -157,19 +183,22 @@ class PageScanner:
             Natural-language question.
         page_numbers:
             0-indexed page numbers to scan.
+        text_only:
+            If ``True``, skip image rendering (faster for overview pages).
 
         Returns
         -------
         PageScanResult
         """
-        return self._scan_pages(question, page_numbers)
+        return self._scan_pages(question, page_numbers, text_only=text_only)
 
     # ------------------------------------------------------------------
     # Core scanning logic
     # ------------------------------------------------------------------
 
     def _scan_pages(
-        self, question: str, page_numbers: list[int]
+        self, question: str, page_numbers: list[int],
+        text_only: bool = False,
     ) -> PageScanResult:
         """Shared implementation with parallel page extraction."""
         if not page_numbers:
@@ -184,10 +213,12 @@ class PageScanner:
             )
             page_numbers = page_numbers[:_MAX_PAGES_PER_SCAN]
 
-        # 1. Parallel extraction of text and page images.
+        # 1. Parallel extraction of text and (optionally) page images.
         def extract_page(pn: int) -> tuple[int, str, str | None]:
             text_pages = self._extractor.extract_pages(start=pn, end=pn + 1)
             text = text_pages[0].text if text_pages else ""
+            if text_only:
+                return pn, text, None
             try:
                 b64 = self._render_page_image(pn)
             except Exception:
@@ -243,14 +274,11 @@ class PageScanner:
         str
             Base64-encoded PNG data.
         """
-        doc = fitz.open(str(self.pdf_path))
-        try:
-            page = doc[page_number]
-            mat = fitz.Matrix(_RENDER_DPI / 72, _RENDER_DPI / 72)
-            pix = page.get_pixmap(matrix=mat)
-            img_bytes = pix.tobytes("png")
-        finally:
-            doc.close()
+        doc = _get_cached_doc(str(self.pdf_path))
+        page = doc[page_number]
+        mat = fitz.Matrix(_RENDER_DPI / 72, _RENDER_DPI / 72)
+        pix = page.get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("png")
         return base64.b64encode(img_bytes).decode("utf-8")
 
     # ------------------------------------------------------------------

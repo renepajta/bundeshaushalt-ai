@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -528,6 +529,7 @@ class QueryEngine:
         try:
             pages = []
             pdf_name = None
+            resolved_nav_type = None  # track for text_only fast-path
 
             # Strategy 1: Specific nav_type + kapitel (most precise)
             if kapitel and section_type:
@@ -548,7 +550,7 @@ class QueryEngine:
                 if rows:
                     pdf_name = rows[0][0]
                     pages = [r[1] for r in rows]
-
+                    resolved_nav_type = bm_type
             # Strategy 2: Kapitel overview
             if not pages and kapitel:
                 rows = conn.execute(
@@ -560,6 +562,7 @@ class QueryEngine:
                 if rows:
                     pdf_name = rows[0][0]
                     pages = [r[1] for r in rows]
+                    resolved_nav_type = 'kap_ueberblick'
 
             # Strategy 3: EP + section_type
             if not pages and einzelplan and section_type:
@@ -572,6 +575,7 @@ class QueryEngine:
                 if rows:
                     pdf_name = rows[0][0]
                     pages = [r[1] for r in rows]
+                    resolved_nav_type = section_type if section_type != 'ueberblick' else 'ep_ueberblick'
 
             # Strategy 4: EP overview (default to ep_ueberblick)
             if not pages and einzelplan:
@@ -584,6 +588,7 @@ class QueryEngine:
                 if rows:
                     pdf_name = rows[0][0]
                     pages = [r[1] for r in rows]
+                    resolved_nav_type = 'ep_ueberblick'
 
             # Strategy 5: Gesamtplan
             if not pages:
@@ -596,14 +601,19 @@ class QueryEngine:
                 if rows:
                     pdf_name = rows[0][0]
                     pages = [r[1] for r in rows]
+                    resolved_nav_type = 'gesamtplan'
 
         finally:
             conn.close()
 
+        # For now, always include images — the 91ms rendering cost is negligible
+        # compared to the 6s GPT-4o API call, and images improve table reading accuracy
+        use_text_only = False
+
         if pages and pdf_name:
             pdf_path = locator.get_pdf_path(year, pdf_name)
             if pdf_path and pdf_path.exists():
-                return self._scan_and_cite(question, pdf_path, pages, year, einzelplan, kapitel)
+                return self._scan_and_cite(question, pdf_path, pages, year, einzelplan, kapitel, text_only=use_text_only)
 
         # Fallback: FTS5 grep for Kapitel/EP number in page text
         if kapitel or einzelplan:
@@ -765,6 +775,7 @@ class QueryEngine:
         year: int,
         einzelplan: str | None,
         kapitel: str | None,
+        text_only: bool = False,
     ) -> tuple[str, list[Citation]]:
         """Shared scanning + citation logic."""
         from src.query.page_scanner import PageScanner
@@ -778,6 +789,7 @@ class QueryEngine:
                 question=question,
                 start_page=page_start_0,
                 end_page=page_end_excl,
+                text_only=text_only,
             )
 
             citations: list[Citation] = []
@@ -860,30 +872,61 @@ class QueryEngine:
                     citations=citations,
                 )
 
-            # Process each tool call.
-            for tool_call in message.tool_calls:
-                fn_name = tool_call.function.name
-                try:
-                    fn_args = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    fn_args = {}
+            # Process tool calls — parallel when there are 2+.
+            if len(message.tool_calls) >= 2:
+                def _run_tool(tc):
+                    fn_name = tc.function.name
+                    try:
+                        fn_args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        fn_args = {}
+                    local_cites: list[Citation] = []
+                    try:
+                        result = self._execute_tool(
+                            fn_name, fn_args,
+                            sources=[], sql_queries=[], citations=local_cites,
+                        )
+                    except Exception as exc:
+                        result = f"Tool-Fehler: {exc}"
+                    return tc.id, fn_name, result, local_cites
 
-                result_text = self._execute_tool(
-                    fn_name,
-                    fn_args,
-                    sources=sources,
-                    sql_queries=sql_queries,
-                    citations=citations,
-                )
-                tools_used.append(fn_name)
+                with ThreadPoolExecutor(max_workers=min(len(message.tool_calls), 4)) as pool:
+                    results = list(pool.map(_run_tool, message.tool_calls))
 
-                messages.append(
-                    {
+                for call_id, fn_name, result_text, local_cites in results:
+                    tools_used.append(fn_name)
+                    citations.extend(local_cites)
+                    if f"read_document" == fn_name and "read_document" not in sources:
+                        sources.append("read_document")
+                    messages.append({
                         "role": "tool",
-                        "tool_call_id": tool_call.id,
+                        "tool_call_id": call_id,
                         "content": result_text,
-                    }
-                )
+                    })
+            else:
+                for tool_call in message.tool_calls:
+                    fn_name = tool_call.function.name
+                    try:
+                        fn_args = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError:
+                        fn_args = {}
+
+                    result_text = self._execute_tool(
+                        fn_name,
+                        fn_args,
+                        sources=sources,
+                        sql_queries=sql_queries,
+                        citations=citations,
+                    )
+                    tools_used.append(fn_name)
+
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result_text,
+                        }
+                    )
 
         # Safety cap reached without a final answer.
         logger.warning(
