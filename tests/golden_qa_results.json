@@ -5,31 +5,29 @@
     "category": "year_comparison",
     "difficulty": "medium",
     "expected": "Ausgaben ohne Verrechnungstitel 2021: 16.161.139k, 2022: 13.717.181k → -15,12%",
-    "actual_answer": "Die prozentuale Veränderung der Ausgaben des Einzelplans 6 von 2021 auf 2022 beträgt:\n\n- **Soll-Ausgaben**: (19.292.503 - 18.502.187) / 18.502.187 = **+4,27%**\n- **Ist-Ausgaben**: (15.780.886 - 14.836.405) / 14.836.405 = **+6,37%**\n\nVerrechnungstitel wurden dabei nicht berücksichtigt.",
+    "actual_answer": "Die Dokumente für die Jahre 2021 und 2022 enthalten keine explizite Kategorie \"Ausgaben ohne Verrechnungstitel\" in den Einzelplanübersichten. Es sind lediglich die Gesamtausgaben und deren Untergliederungen angegeben. Um die prozentuale Veränderung der Ausgaben ohne Verrechnungstitel zu berechnen, müsste eine detaillierte Analyse der Titel erfolgen, um die Verrechnungstitel herauszufiltern. Soll ich diese detaillierte Analyse durchführen?",
     "tools_used": [
-      "query_database",
-      "compute",
-      "compute"
+      "read_document",
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT year, SUM(ausgaben_soll) AS soll, SUM(ausgaben_ist) AS ist \nFROM haushaltsdaten \nWHERE einzelplan = '06' AND is_verrechnungstitel = 0 AND year IN (2021, 2022) \nGROUP BY year \nORDER BY year\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 2 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 19.9,
+    "elapsed_seconds": 79.3,
     "data_available": true,
     "data_reason": "2021+2022 EP06 data available in DB",
     "status": "answerable",
     "score": {
       "total_figures": 3,
-      "found": 1,
+      "found": 0,
       "missing": [
+        "ausgaben_2021=16161139",
         "ausgaben_2022=13717181",
         "veraenderung_prozent=-15.12"
       ],
-      "score": 0.3333333333333333
+      "score": 0.0
     }
   },
   {
@@ -38,22 +36,20 @@
     "category": "soll_ist_comparison",
     "difficulty": "medium",
     "expected": "Ist: 51.132.650k, Soll: 50.117.445k, Differenz: 1.015.205k, Ausschöpfung: 102,03%",
-    "actual_answer": "Die Differenz zwischen den Soll- und Ist-Ausgaben im Jahr 2023 für Einzelplan 14, ohne Berücksichtigung von Verrechnungstiteln, beträgt 7.196.347 Euro. \n\nDie prozentuale Ausschöpfung der Soll-Ausgaben liegt bei 86,56 %, was bedeutet, dass 13,44 % der geplanten Mittel nicht ausgegeben wurden.",
+    "actual_answer": "Die Differenz zwischen Soll und Ist für das Jahr 2023 im Einzelplan 14, ohne Berücksichtigung von Verrechnungstiteln, beträgt **2.905.591 Tsd. €**. Dies entspricht einer Ausschöpfung von **94,2 %** des Soll-Betrags.\n\n**Quellenangabe:** Bundeshaushaltsplan 2023, Einzelplan 14, Überblick, Seite 2099.",
     "tools_used": [
-      "query_database",
+      "read_document",
       "compute"
     ],
-    "sql_queries": [
-      "SELECT SUM(ausgaben_soll) AS soll, SUM(ausgaben_ist) AS ist \nFROM haushaltsdaten \nWHERE year = 2023 AND einzelplan = '14' AND is_verrechnungstitel = 0 AND ausgaben_ist IS NOT NULL\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 1 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 8.8,
-    "data_available": "partial",
-    "data_reason": "Soll data available; Ist (ausgaben_ist) likely NULL for 2023",
-    "status": "partial_data",
+    "elapsed_seconds": 35.1,
+    "data_available": true,
+    "data_reason": "Soll data available; documents cover Ist context",
+    "status": "answerable",
     "score": {
       "total_figures": 4,
       "found": 0,
@@ -72,33 +68,28 @@
     "category": "ratio_calculation",
     "difficulty": "medium",
     "expected": "Ausgaben: 54.820.073k, BIP: 4.469.910.000k → 1,23%",
-    "actual_answer": "Die beschlossenen Soll-Ausgaben des Kapitels 1101 im Jahr 2025 betragen 33.700.000 Euro. Das Bruttoinlandsprodukt (BIP) für 2025 liegt bei 4.469.910.000 Euro. Der Anteil der Soll-Ausgaben des Kapitels 1101 am BIP beträgt somit etwa **0,75%**.\n\nBerechnung:\n\\[\n\\text{Anteil} = \\frac{33.700.000}{4.469.910.000} \\times 100 = 0,75\\%\n\\]\n\nQuellen:\n- Soll-Ausgaben: Bundeshaushalt-2025.pdf, Seite 1565\n- BIP: Volkswirtschaftliche Kennzahlen, 2025",
+    "actual_answer": "Die beschlossenen Soll-Ausgaben des Kapitels 1101 für das Jahr 2025 betragen 54.820.073.000 Euro. Im Vergleich zum nominalen Bruttoinlandsprodukt von 4.328.970 Millionen Euro machen diese Ausgaben einen Anteil von etwa **1,27 %** aus.\n\n**Quellen:**\n- Soll-Ausgaben Kapitel 1101: Bundeshaushalt 2025, Seite 1560.\n- Bruttoinlandsprodukt 2025: Bundeshaushalt 2025, Seite 32.",
     "tools_used": [
-      "query_database",
-      "query_database",
+      "read_document",
+      "read_document",
       "compute"
     ],
-    "sql_queries": [
-      "SELECT SUM(ausgaben_soll) AS soll_ausgaben, source_pdf, source_page FROM haushaltsdaten WHERE year = 2025 AND kapitel = '1101' GROUP BY source_pdf, source_page\nLIMIT 1000",
-      "SELECT value AS bruttoinlandsprodukt \nFROM referenzdaten \nWHERE indicator = 'BIP' AND year = 2025\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 6 Zeile(n)",
-      "SQL: 1 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 11.4,
+    "elapsed_seconds": 247.6,
     "data_available": true,
     "data_reason": "2025 Kap 1101 data + BIP in referenzdaten",
     "status": "answerable",
     "score": {
       "total_figures": 3,
-      "found": 1,
+      "found": 2,
       "missing": [
-        "ausgaben=54820073",
-        "anteil_prozent=1.23"
+        "bip=4469910000"
       ],
-      "score": 0.3333333333333333
+      "score": 0.6666666666666666
     }
   },
   {
@@ -107,33 +98,31 @@
     "category": "inflation_adjustment",
     "difficulty": "complex",
     "expected": "Nominalwert 476.807.656k, Realwert mit Bezugsjahr 2022: 440.437.583k, Differenz absolut: -36.370.073k, prozentual: -7,6%",
-    "actual_answer": "Die nominalen Sollwerte der Ausgaben im Bundeshaushalt 2024 betragen 646.018.813 Euro, während die Sollwerte im Jahr 2022 bei 723.602.723 Euro lagen. \n\nDie Differenz beträgt absolut -77.583.910 Euro. Prozentual entspricht dies einer Veränderung von -10,72 %. \n\nDie inflationsbereinigten Realwerte für 2024 im Bezugsjahr 2022 wurden noch nicht berücksichtigt. Bitte gib die Inflationsrate an, um die Berechnung fortzusetzen.",
+    "actual_answer": "Die nominalen Sollwerte (Ausgaben) des Bundeshaushalts 2024 betragen **476.807.656.000 Euro**, während die Ausgaben des Bundeshaushalts im Bezugsjahr 2022 **495.791.475.000 Euro** betrugen. \n\nDie absolute Differenz beträgt **-18.983.819.000 Euro**, was einer prozentualen Veränderung von **-3,83 %** entspricht.\n\nQuellen:\n- Bundeshaushalt 2024, Seite 1\n- Bundeshaushalt 2022, Seite 1",
     "tools_used": [
-      "query_database",
+      "read_document",
+      "read_document",
       "compute",
       "compute"
     ],
-    "sql_queries": [
-      "SELECT year, SUM(ausgaben_soll) AS soll \nFROM haushaltsdaten \nWHERE year IN (2022, 2024) AND is_verrechnungstitel = 0 \nGROUP BY year \nORDER BY year\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 2 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 10.0,
-    "data_available": "partial",
-    "data_reason": "2024 data available; inflation adjustment needs referenzdaten",
-    "status": "partial_data",
+    "elapsed_seconds": 225.2,
+    "data_available": true,
+    "data_reason": "2024 data available; documents provide inflation context",
+    "status": "answerable",
     "score": {
       "total_figures": 4,
-      "found": 0,
+      "found": 1,
       "missing": [
-        "nominalwert=476807656",
         "realwert=440437583",
         "differenz=-36370073",
         "differenz_prozent=-7.6"
       ],
-      "score": 0.0
+      "score": 0.25
     }
   },
   {
@@ -142,26 +131,19 @@
     "category": "personnel_lookup",
     "difficulty": "simple",
     "expected": "2500, Kapitel 1403 (2012 hießen sie allerdings noch Wehrübende)",
-    "actual_answer": "Im Jahr 2012 gab es 2.500 Planstellen für Wehrübende. Diese sind keinem spezifischen Kapitel zugeordnet, sondern werden nachrichtlich aufgeführt. Die Information stammt aus dem Haushaltsplan 2012, Seite 77.",
+    "actual_answer": "Im Jahr 2012 gab es 2.500 Planstellen für Reservedienstleistende. Diese sind keinem spezifischen Kapitel zugeordnet, sondern wurden nachrichtlich aufgeführt. Die Information stammt aus dem Haushaltsplan 2012.",
     "tools_used": [
-      "query_database",
-      "query_database",
-      "read_document",
       "read_document"
     ],
-    "sql_queries": [
-      "SELECT kapitel, SUM(planstellen_gesamt) AS planstellen, source_pdf, source_page \nFROM personalhaushalt \nWHERE year = 2012 AND kapitel IN (\n    SELECT kapitel \n    FROM haushaltsdaten \n    WHERE year = 2012 AND (titel_text LIKE '%Reservedienstleistende%' OR titel_text LIKE '%Wehrübende%')\n) \nGROUP BY kapitel, source_pdf, source_page\nLIMIT 1000",
-      "SELECT kapitel, SUM(planstellen_gesamt) AS planstellen, source_pdf, source_page \nFROM personalhaushalt \nWHERE year = 2012 AND kapitel IN (\n    SELECT kapitel \n    FROM haushaltsdaten \n    WHERE year = 2012 AND (titel_text LIKE '%Wehrübende%' OR titel_text LIKE '%Reservedienstleistende%')\n) \nGROUP BY kapitel, source_pdf, source_page\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 0 Zeile(n)",
       "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 156.0,
-    "data_available": "partial",
-    "data_reason": "2012 data available; Reservedienstleistende in titel_text, not personalhaushalt",
-    "status": "partial_data",
+    "elapsed_seconds": 92.7,
+    "data_available": true,
+    "data_reason": "2012 data available; documents cover Reservedienstleistende",
+    "status": "answerable",
     "score": {
       "total_figures": 2,
       "found": 1,
@@ -177,40 +159,20 @@
     "category": "historical_tracking",
     "difficulty": "complex",
     "expected": "2005: Kapitel 0607 (Text nur 'Bundesbeauftragten für den Datenschutz'), 2006-2013: Kapitel 0607, 2014-2016: Kapitel 0613, 2016-2024: Kapitel 2112, 2025-2026: Kapitel 2112 unter neuem Kapitel-Text",
-    "actual_answer": "Die Dokumentanalyse bestätigt, dass der/die Bundesbeauftragte für den Datenschutz und die Informationsfreiheit ab dem Jahr 2016 dem **Kapitel 2112** zugeordnet war.\n\nZusammenfassung der Zuordnung:\n1. **Kapitel 0607**: Von 2005 bis 2013.\n2. **Kapitel 0613**: Von 2014 bis 2015.\n3. **Kapitel 2112**: Von 2016 bis 2026.",
-    "tools_used": [
-      "query_database",
-      "query_database",
-      "query_database",
-      "read_document",
-      "read_document"
-    ],
-    "sql_queries": [
-      "SELECT year, kapitel, kapitel_text FROM kapitel_meta WHERE kapitel_text LIKE '%Datenschutz%' ORDER BY year\nLIMIT 1000",
-      "SELECT year, kapitel, kapitel_text FROM kapitel_meta WHERE kapitel_text LIKE '%Informationsfreiheit%' ORDER BY year\nLIMIT 1000",
-      "SELECT year, kapitel, kapitel_text FROM kapitel_meta WHERE kapitel_text LIKE '%Kapitel 0613%' OR kapitel_text LIKE '%Kapitel 2112%' ORDER BY year\nLIMIT 1000"
-    ],
-    "sources": [
-      "SQL: 3 Zeile(n)",
-      "SQL: 2 Zeile(n)",
-      "SQL: 0 Zeile(n)",
-      "read_document"
-    ],
-    "confidence": "high",
-    "elapsed_seconds": 341.6,
+    "actual_answer": "Die Zuordnung des/der Bundesbeauftragten für den Datenschutz und die Informationsfreiheit (BfDI) zu den Kapiteln des Bundeshaushalts hat sich im Zeitraum von 2005 bis 2026 mehrfach geändert. Hier ist die Übersicht:\n\n1. **2005–2005**: Kapitel **0607**  \n   → Zuordnung zum Bundesministerium des Innern.\n\n2. **2006–2013**: Kapitel **0607**  \n   → Weiterhin beim Bundesministerium des Innern.\n\n3. **2014–2016**: Kapitel **0613**  \n   → Umzug innerhalb des Einzelplans 06 (Bundesministerium des Innern und für Heimat).\n\n4. **2016–2024**: Kapitel **2112**  \n   → Wechsel in den Einzelplan 21 (Bundesrechnungshof).\n\n5. **2025–2026**: Kapitel **2112**  \n   → Bleibt weiterhin im Einzelplan 21.\n\nFalls du detaillierte Informationen zu einem bestimmten Jahr oder Kapitel benötigst, kann ich die entsprechenden Haushaltsdokumente durchsuchen.",
+    "tools_used": [],
+    "sql_queries": [],
+    "sources": [],
+    "confidence": "low",
+    "elapsed_seconds": 3.4,
     "data_available": true,
     "data_reason": "kapitel_meta 2005-2026 available + SemanticBridge",
     "status": "answerable",
     "score": {
       "total_figures": 10,
-      "found": 6,
-      "missing": [
-        "zuordnungen[1].years=2006-2013",
-        "zuordnungen[2].years=2014-2016",
-        "zuordnungen[3].years=2016-2024",
-        "zuordnungen[4].years=2025-2026"
-      ],
-      "score": 0.6
+      "found": 10,
+      "missing": [],
+      "score": 1.0
     }
   },
   {
@@ -219,21 +181,19 @@
     "category": "historical_tracking",
     "difficulty": "complex",
     "expected": "Von 2005-2015 ist dieses Kapitel dem Bundesministerium zugeordnet, ab 2016 sind dort die Bundesfernstraßen ausgeplant",
-    "actual_answer": "Die Inhalte von Kapitel 1201 haben sich zwischen 2005 und 2016 grundlegend verändert:\n\n### **2005: Bundesministerium für Verkehr, Bau und Wohnungswesen**\nKapitel 1201 umfasste die Einnahmen und Ausgaben des Ministeriums. Die wesentlichen Punkte waren:\n- **Einnahmen**: Verwaltungseinnahmen (z. B. Gebühren, Vermietung, Verpachtung) und Erstattungen.\n- **Ausgaben**: Personalausgaben (z. B. für Beamte, Angestellte, Arbeiter), sächliche Verwaltungsausgaben (z. B. Geschäftsbedarf, Unterhaltung von Gebäuden), Öffentlichkeitsarbeit und sonstige Verwaltungsausgaben.\n- **Verpflichtungsermächtigungen**: Öffentlichkeitsarbeit mit einem Gesamtbetrag von 300 T€.\n\n### **2016: Bundesfernstraßen**\nKapitel 1201 wurde den Bundesfernstraßen zugeordnet und konzentrierte sich auf Infrastrukturmaßnahmen. Die wesentlichen Punkte waren:\n- **Einnahmen**: Hauptsächlich aus der Lkw-Maut (4,6 Mrd. €).\n- **Ausgaben**: Investitionen in Substanzerhaltung (3,15 Mrd. €), Neubau und Erweiterung (1,4 Mrd. €), sowie Öffentlich-private Partnerschaften (ÖPP) mit Gesamtausgaben von 6,5 Mrd. € über 30 Jahre.\n- **Verpflichtungsermächtigungen**: Gesamtbetrag von 15,99 Mrd. €, davon 11,7 Mrd. € für zukünftige Haushaltsjahre.\n- **Ziele**: Vorrang für Substanzerhaltung des Bestandsnetzes, Neubau zur Beseitigung von Engpässen, Förderung von ÖPP-Projekten.\n\n### Fazit:\nDie Umstellung von Kapitel 1201 spiegelt die Trennung zwischen ministeriellen Aufgaben und Infrastrukturmaßnahmen wider. Während es 2005 die Verwaltungsausgaben des Ministeriums abdeckte, konzentrierte es sich ab 2016 auf die Finanzierung und den Betrieb der Bundesfernstraßen.",
+    "actual_answer": "Die inhaltliche Bedeutung von Kapitel 1201 im Bundeshaushalt hat sich zwischen 2005 und 2026 wie folgt entwickelt:\n\n### **2005 bis 2015: Bundesministerium und Bundesfernstraßen**\n- **2005**: Kapitel 1201 umfasste Einnahmen und Ausgaben des **Bundesministeriums für Verkehr, Bau und Stadtentwicklung** sowie der **Bundesfernstraßen**. Es beinhaltete Verwaltungseinnahmen (z. B. Gebühren, Vermischte Einnahmen) und Ausgaben für Personal, Sachmittel und Investitionen. Haushaltsvermerke regelten die Zweckbindung und Flexibilisierung der Mittel.\n- **2015**: Das Kapitel blieb ähnlich strukturiert, mit Einnahmen aus Verwaltung und Vermietung sowie Ausgaben für Personal, Sachmittel, Zuweisungen und Investitionen. Es zeigte eine detaillierte Übersicht über die finanziellen Mittel des Ministeriums und der Bundesfernstraßen.\n\n### **Ab 2016: Fokus auf Bundesfernstraßen**\n- **2016**: Kapitel 1201 wurde ausschließlich den **Bundesfernstraßen** zugeordnet. Es enthielt Einnahmen und Ausgaben für diesen Bereich, darunter Personalausgaben, Sachmittel, Zuweisungen und Investitionen. Verpflichtungsermächtigungen für zukünftige Haushaltsjahre wurden ebenfalls aufgeführt.\n- **2026**: Das Kapitel bleibt auf die **Bundesfernstraßen** fokussiert. Es umfasst Einnahmen aus Verwaltung und sonstigen Quellen sowie Ausgaben für Personal, Sachmittel, Zuweisungen und Investitionen. Verpflichtungsermächtigungen sind weiterhin ein zentraler Bestandteil.\n\n### **Zusammenfassung der Entwicklung**\n- **2005–2015**: Kombination von Ministerium und Bundesfernstraßen.\n- **Ab 2016**: Konzentration auf Bundesfernstraßen, während die Ministeriumsausgaben in ein anderes Kapitel verlagert wurden.\n\nDie genauen Zahlen und Haushaltsvermerke variieren je nach Jahr, aber die strukturelle Trennung ab 2016 markiert den entscheidenden Wandel.",
     "tools_used": [
-      "query_database",
+      "read_document",
+      "read_document",
       "read_document",
       "read_document"
     ],
-    "sql_queries": [
-      "SELECT year, kapitel, kapitel_text FROM kapitel_meta WHERE kapitel = '1201' ORDER BY year\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 21 Zeile(n)",
       "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 259.2,
+    "elapsed_seconds": 71.0,
     "data_available": true,
     "data_reason": "kapitel_meta 2005-2026 available + SemanticBridge",
     "status": "answerable",
@@ -250,30 +210,27 @@
     "category": "version_comparison",
     "difficulty": "complex",
     "expected": "Personalausgaben, konkret Titel 431 57",
-    "actual_answer": "Die Ausgaben des Kapitels 0111 im Jahr 2024 verändern sich im ersten Entwurf gegenüber dem Beschluss um -20,84%. \n\nBerechnungsweg: (900 - 1137) / 1137 = -20,84%.\n\nQuelle: Bundeshaushalt-2024.pdf, Seite 127.",
+    "actual_answer": "Die Ausgaben des Kapitels 0111 im Jahr 2024 bleiben im ersten Entwurf und im Beschluss unverändert bei **9.264.000 €**. Es gibt keine Differenz zwischen den beiden Versionen.\n\nDie Aufteilung der Ausgaben ist wie folgt:\n- **Personalausgaben**: 5.834.000 €\n- **Sächliche Verwaltungsausgaben**: 2.630.000 €\n- **Zuweisungen und Zuschüsse (ohne Investitionen)**: 800.000 €\n- **Besondere Finanzierungsausgaben**: keine\n\nQuellen: Bundeshaushalt 2024, Kapitel 0111, Seiten 125 (Entwurf und Beschluss).",
     "tools_used": [
-      "query_database",
-      "compute"
+      "read_document",
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT ausgaben_soll, ausgaben_ist, source_pdf, source_page FROM haushaltsdaten WHERE year = 2024 AND kapitel = '0111'\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 22 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 6.0,
+    "elapsed_seconds": 27.9,
     "data_available": "partial",
-    "data_reason": "2024 beschluss data available; entwurf also present but comparison needs version_detail",
+    "data_reason": "2024 beschluss data available; entwurf needs version_detail",
     "status": "partial_data",
     "score": {
       "total_figures": 2,
-      "found": 0,
+      "found": 1,
       "missing": [
-        "bereich=Personalausgaben",
         "titel=431 57"
       ],
-      "score": 0.0
+      "score": 0.5
     }
   },
   {
@@ -282,23 +239,23 @@
     "category": "deckungsfaehigkeit",
     "difficulty": "advanced",
     "expected": "5+30",
-    "actual_answer": "Das Ausgabenvolumen für den Titel **531 01** im Kapitel **1403** im Jahr 2024 beträgt **1.530 Euro (Soll)** und **1.437 Euro (Ist)**. \n\nDie Seite **2148** des Bundeshaushalts 2024 enthält keine Angaben zu deckungsfähigen Titeln für diesen Titel. Um die deckungsfähigen Titel zu identifizieren, müsste eine umfassendere Suche im Kapitel erfolgen. Soll ich dies weiter untersuchen?",
+    "actual_answer": "Das Ausgabenvolumen des Titels **531 01** im Kapitel **1403** für das Jahr 2024 beträgt **5.500.000 €**. Zusätzlich ist der Titel **553 01** in Höhe von **10.000.000 €** gegenseitig deckungsfähig. Somit steht ein Gesamtvolumen von **15.500.000 €** zur Verfügung, wenn man die deckungsfähigen Titel berücksichtigt.\n\n**Quellen:**\n- Bundeshaushalt 2024, Kapitel 1403, Titel 531 01 (Seite 251)\n- Deckungsfähige Titel gemäß Haushaltsvermerk (Seiten 2138-2149)",
     "tools_used": [
-      "query_database",
-      "read_document"
+      "read_document",
+      "read_document",
+      "read_document",
+      "read_document",
+      "compute"
     ],
-    "sql_queries": [
-      "SELECT SUM(ausgaben_soll) AS ausgaben_soll, SUM(ausgaben_ist) AS ausgaben_ist, source_pdf, source_page \nFROM haushaltsdaten \nWHERE year = 2024 AND kapitel = '1403' AND titel LIKE '531 01%' \nGROUP BY kapitel, titel, source_pdf, source_page\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 1 Zeile(n)",
       "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 34.1,
-    "data_available": "partial",
-    "data_reason": "2024 Kap 1403 data available; deckungsfaehig column exists but may not be populated",
-    "status": "partial_data",
+    "elapsed_seconds": 298.6,
+    "data_available": true,
+    "data_reason": "2024 Kap 1403 data + documents for deckungsfaehig",
+    "status": "answerable",
     "score": {
       "total_figures": 3,
       "found": 2,
@@ -314,20 +271,21 @@
     "category": "version_tracking",
     "difficulty": "complex",
     "expected": "2024.0.1 Beschluss",
-    "actual_answer": "Die Flexibilisierung des Titels 53101 im Kapitel 0415 änderte sich nicht zwischen den Jahren 2022 und 2023. Es gelten weiterhin die Flexibilisierungsregelungen gemäß § 5 Abs. 2 bis 5 HG, wie auf Seite 249 des Haushaltsplans 2023 angegeben.",
+    "actual_answer": "Die Flexibilisierung des Titels 53101 im Kapitel 415 konnte in den Haushaltsdokumenten der Jahre 2019 bis 2024 nicht identifiziert werden. Es gibt keine spezifischen Informationen oder Änderungen zu diesem Titel in den untersuchten Haushaltsversionen. Möglicherweise ist der Titel nicht flexibilisiert oder die Flexibilisierung wurde nicht dokumentiert.",
     "tools_used": [
-      "query_database",
+      "read_document",
+      "read_document",
+      "read_document",
+      "read_document",
+      "read_document",
       "read_document"
     ],
-    "sql_queries": [
-      "SELECT year, kapitel, titel, deckungsfaehig FROM haushaltsdaten WHERE kapitel = '0415' AND titel = '53101' ORDER BY year LIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 0 Zeile(n)",
       "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 157.2,
+    "elapsed_seconds": 21778.0,
     "data_available": "partial",
     "data_reason": "2024 data available; version_detail tracking limited",
     "status": "partial_data",
@@ -347,32 +305,35 @@
     "category": "cross_reference",
     "difficulty": "complex",
     "expected": "Titel 88221 (neu in Kapitel 0416, bisher in Epl 05, 06, 10, 12)",
-    "actual_answer": "Im Jahr 2026 wurden mehrere Titel erstmalig im Einzelplan 04 eingeführt. Einige dieser Titel waren zuvor in anderen Einzelplänen zu finden. Hier sind die relevanten Titel und ihre vorherigen Zuordnungen:\n\n### Titel und vorherige Einzelpläne:\n1. **Titel 532 13**:\n   - Vorher in Einzelplan 12 (Kapitel 1202) und Einzelplan 15 (Kapitel 1510).\n\n2. **Titel 531 21**:\n   - Vorher in Einzelplan 17 (Kapitel 1702).\n\n3. **Titel 542 22**:\n   - Vorher in Einzelplan 06 (Kapitel 0601).\n\n4. **Titel 681 21**:\n   - Vorher in Einzelplan 08 (Kapitel 0813), Einzelplan 15 (Kapitel 1509), und Einzelplan 60 (Kapitel 6004).\n\n5. **Titel 684 20**:\n   - Vorher in Einzelplan 06 (Kapitel 0601).\n\n6. **Titel 684 23**:\n   - Vorher in Einzelplan 10 (Kapitel 1002) und Einzelplan 06 (Kapitel 0601).\n\n7. **Titel 684 24**:\n   - Vorher in Einzelplan 10 (Kapitel 1002) und Einzelplan 06 (Kapitel 0601).\n\n8. **Titel 684 26**:\n   - Vorher in Einzelplan 06 (Kapitel 0601).\n\n9. **Titel 684 27**:\n   - Vorher in Einzelplan 06 (Kapitel 0601).\n\n10. **Titel 684 28**:\n    - Vorher in Einzelplan 06 (Kapitel 0601).\n\n11. **Titel 686 23**:\n    - Vorher in Einzelplan 06 (Kapitel 0601).\n\n12. **Titel 686 24**:\n    - Vorher in Einzelplan 16 (Kapitel 1602) und Einzelplan 06 (Kapitel 0601).\n\n13. **Titel 686 25**:\n    - Vorher in Einzelplan 06 (Kapitel 0601).\n\n14. **Titel 686 26**:\n    - Vorher in Einzelplan 06 (Kapitel 0601).\n\n15. **Titel 882 23**:\n    - Vorher in Einzelplan 60 (Kapitel 6002).\n\n16. **Titel 427 19**:\n    - Vorher in Einzelplänen 05, 06, 07, 08, 09, 10, 12, 14, 15, 16, und 17 (diverse Kapitel).\n\n17. **Titel 428 11**:\n    - Vorher in Einzelplänen 05, 06, 07, 09, 10, 12, und 16 (diverse Kapitel).\n\n### Zusammenfassung:\nDie Titel wurden aus verschiedenen Einzelplänen wie 05, 06, 08, 10, 12, 15, 16, und 60 in den Einzelplan 04 migriert. Die genaue Zuordnung zeigt, dass die Titel eine breite Streuung über mehrere Ressorts hatten, bevor sie 2026 im Einzelplan 04 zusammengeführt wurden.",
+    "actual_answer": "Die Frage, welcher Titel 2026 erstmalig im Einzelplan 04 vorkam und zuvor nur in anderen Einzelplänen zu finden war, konnte nicht direkt aus den verfügbaren Dokumenten beantwortet werden. Weder die Übersicht noch die Vermerke oder der Gesamtplan des Einzelplans 04 für 2026 enthalten spezifische Informationen zu neuen Titeln und deren vorheriger Zuordnung. \n\nFalls weitere Details benötigt werden, könnte eine gezielte Suche in den Einzelplänen der Vorjahre hilfreich sein, um mögliche Migrationen von Titeln zu identifizieren.",
     "tools_used": [
-      "query_database",
-      "query_database"
+      "read_document",
+      "read_document",
+      "read_document",
+      "read_document",
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT titel, kapitel \nFROM haushaltsdaten \nWHERE year = 2026 \n  AND einzelplan = '04' \n  AND titel NOT IN (\n    SELECT titel \n    FROM haushaltsdaten \n    WHERE year < 2026 \n      AND einzelplan = '04'\n  )\nLIMIT 1000",
-      "SELECT titel, kapitel, einzelplan \nFROM haushaltsdaten \nWHERE titel IN ('532 13', '531 21', '542 22', '681 21', '684 20', '684 23', '684 24', '684 26', '684 27', '684 28', '686 23', '686 24', '686 25', '686 26', '882 23', '427 19', '428 11') \nAND year < 2026 \nAND einzelplan != '04'\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 17 Zeile(n)",
-      "SQL: 1000 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 18.2,
+    "elapsed_seconds": 13277.8,
     "data_available": true,
     "data_reason": "2005-2026 haushaltsdaten available for cross-EP comparison",
     "status": "answerable",
     "score": {
       "total_figures": 6,
-      "found": 4,
+      "found": 0,
       "missing": [
         "titel=88221",
-        "neues_kapitel=0416"
+        "neues_kapitel=0416",
+        "bisherige_einzelplaene[0]=05",
+        "bisherige_einzelplaene[1]=06",
+        "bisherige_einzelplaene[2]=10",
+        "bisherige_einzelplaene[3]=12"
       ],
-      "score": 0.6666666666666666
+      "score": 0.0
     }
   },
   {
@@ -381,26 +342,29 @@
     "category": "verpflichtungsermachtigungen",
     "difficulty": "medium",
     "expected": "21865, fällig in 2021: 11320, 2022: 8620, 2023: 1590, Folgejahre: 335",
-    "actual_answer": "Im Jahr 2020 wurden für das Kapitel 0622 Verpflichtungsermächtigungen in verschiedenen Titeln und Beträgen festgelegt. Die Gesamtsummen und Fälligkeiten sind wie folgt:\n\n### Verpflichtungsermächtigungen und Fälligkeiten:\n1. **Titel ohne spezifische Nummer**:\n   - Gesamtbetrag: **21.865 €**\n   - Fälligkeiten:\n     - 2021: **11.320 €**\n     - 2022: **8.620 €**\n     - 2023: **1.590 €**\n     - 2024: **335 €**\n\n2. **Titel 518 02**:\n   - Gesamtbetrag: **1.835 €**\n   - Fälligkeiten:\n     - 2021: **500 €**\n     - 2022: **500 €**\n     - 2023: **500 €**\n     - 2024: **335 €**\n\n3. **Titel 544 01**:\n   - Gesamtbetrag: **5.500 €**\n   - Fälligkeiten:\n     - 2021: **2.500 €**\n     - 2022: **3.000 €**\n\n4. **Titel 681 08**:\n   - Gesamtbetrag: **330 €**\n   - Fälligkeiten:\n     - 2021: **120 €**\n     - 2022: **120 €**\n     - 2023: **90 €**\n\n5. **Titel 812 01**:\n   - Fälligkeit:\n     - 2021: **200 €**\n\n6. **Titel 812 02**:\n   - Gesamtbetrag: **14.000 €**\n   - Fälligkeiten:\n     - 2021: **8.000 €**\n     - 2022: **5.000 €**\n     - 2023: **1.000 €**\n\n### Gesamtüberblick:\nDie Verpflichtungsermächtigungen summieren sich auf mehrere Jahre, wobei die höchsten Beträge in den Jahren 2021 und 2022 fällig sind.",
+    "actual_answer": "Im Jahr 2020 wurden im Kapitel 0622 Verpflichtungsermächtigungen in Höhe von insgesamt **1.835 T€** erteilt. Die Fälligkeiten verteilen sich wie folgt:\n\n- 2021: **500 T€**\n- 2022: **500 T€**\n- 2023: **500 T€**\n- 2024: **335 T€**\n\n(Quelle: Bundeshaushalt 2020, Einzelplan 06, Kapitel 0622, Seiten 708-709)",
     "tools_used": [
-      "query_database"
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT kapitel, titel, betrag_gesamt, faellig_jahr, faellig_betrag \nFROM verpflichtungsermachtigungen \nWHERE year = 2020 AND kapitel = '0622' \nORDER BY titel, faellig_jahr\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 17 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 8.3,
-    "data_available": "partial",
-    "data_reason": "VE data only for 2005-2011; 2020 VE not yet extracted",
-    "status": "partial_data",
+    "elapsed_seconds": 24.3,
+    "data_available": true,
+    "data_reason": "VE data in documents for 2020",
+    "status": "answerable",
     "score": {
       "total_figures": 5,
-      "found": 5,
-      "missing": [],
-      "score": 1.0
+      "found": 1,
+      "missing": [
+        "gesamt=21865",
+        "faelligkeit.2021=11320",
+        "faelligkeit.2022=8620",
+        "faelligkeit.2023=1590"
+      ],
+      "score": 0.2
     }
   },
   {
@@ -409,29 +373,24 @@
     "category": "personnel_detail",
     "difficulty": "simple",
     "expected": "1124 tarifliche, 1 außertariflich, insgesamt 1125",
-    "actual_answer": "Im Jahr 2020 hatte Kapitel 0455, Titel 428 01 insgesamt 48 Planstellen. Davon waren 45 tariflich und 3 außertariflich.",
+    "actual_answer": "Im Jahr 2020 hatte Kapitel 0455, Titel 428 01 insgesamt **1.125 Planstellen**, die vollständig tariflich waren. Es gab keine spezifische Aufteilung oder Erwähnung von außertariflichen Planstellen für diesen Titel.",
     "tools_used": [
-      "query_database"
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT SUM(planstellen_tariflich) AS tariflich, SUM(planstellen_aussertariflich) AS aussertariflich, SUM(planstellen_gesamt) AS gesamt\nFROM personalhaushalt\nWHERE year = 2020 AND kapitel = '0455' AND titel = '428 01'\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 1 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 5.6,
+    "elapsed_seconds": 131.6,
     "data_available": true,
     "data_reason": "2020 Kap 0455 personnel data available",
     "status": "answerable",
     "score": {
       "total_figures": 3,
-      "found": 1,
-      "missing": [
-        "tariflich=1124",
-        "gesamt=1125"
-      ],
-      "score": 0.3333333333333333
+      "found": 3,
+      "missing": [],
+      "score": 1.0
     }
   },
   {
@@ -440,23 +399,19 @@
     "category": "detail_breakdown",
     "difficulty": "advanced",
     "expected": "insgesamt 26, Erstbeschaffung 26, Ersatzbeschaffung 41, abzüglich Mehreinnahmen -41",
-    "actual_answer": "Im Kapitel 0719, Titel F 811 01 – 059 des Bundeshaushalts 2020, sind die Angaben zur Erstbeschaffung und Ersatzbeschaffung wie folgt:\n\n1. **Erstbeschaffung**: 1 Pkw mit einem Betrag von 40.000 €.\n2. **Ersatzbeschaffung**: 1 Pkw ebenfalls mit einem Betrag von 40.000 €.\n\nZusätzlich wird ein Abzug von Mehreinnahmen bei Titel 132 01 aus der Veräußerung von Dienst-Kfz gemäß § 6 Abs. 7 HG erwähnt.\n\nQuelle: Bundeshaushalt 2020, Kapitel 0719, Seite 931.",
+    "actual_answer": "Im Kapitel 0719, Titel F 811 01 – 059, des Bundeshaushalts 2020 sind keine spezifischen Angaben zur Erstbeschaffung oder Ersatzbeschaffung im Soll 2020 enthalten. Die entsprechenden Informationen konnten auf den relevanten Seiten nicht gefunden werden.",
     "tools_used": [
-      "query_database",
       "read_document"
     ],
-    "sql_queries": [
-      "SELECT ausgaben_soll, source_pdf, source_page \nFROM haushaltsdaten \nWHERE year = 2020 AND kapitel = '0719' AND titel LIKE 'F 811 01 – 059'\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 0 Zeile(n)",
       "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 166.5,
-    "data_available": false,
-    "data_reason": "Sachverhalte/Erläuterungen table empty — needs extraction",
-    "status": "data_gap_not_acknowledged",
+    "elapsed_seconds": 124.9,
+    "data_available": true,
+    "data_reason": "Documents contain Sachverhalte/Erläuterungen",
+    "status": "answerable",
     "score": {
       "total_figures": 4,
       "found": 0,
@@ -475,18 +430,16 @@
     "category": "personnel_lookup",
     "difficulty": "simple",
     "expected": "3",
-    "actual_answer": "Im Jahr 2024 gibt es keine ORR-Planstellen im Kapitel 1513 in der Titelgruppe 05.",
+    "actual_answer": "Die Anzahl der ORR-Planstellen im Jahr 2024 im Kapitel 1513 in Titelgruppe 05 konnte auf den analysierten Seiten des Bundeshaushalts nicht gefunden werden. Es scheint, dass diese Information dort nicht explizit angegeben ist.",
     "tools_used": [
-      "query_database"
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT SUM(planstellen_gesamt) AS orr_planstellen \nFROM personalhaushalt \nWHERE year = 2024 AND kapitel = '1513' AND titelgruppe = '05' AND besoldungsgruppe = 'ORR'\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 1 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 4.7,
+    "elapsed_seconds": 189.6,
     "data_available": true,
     "data_reason": "2024 Kap 1513 personnel data available",
     "status": "answerable",
@@ -503,18 +456,16 @@
     "category": "version_comparison",
     "difficulty": "complex",
     "expected": "Kap. 1010, Titel 68607",
-    "actual_answer": "Im Jahr 2024 gab es zahlreiche Titel, die nur im Beschluss und nicht im Entwurf enthalten waren. Hier sind einige Beispiele:\n\n1. Titel \"529 01\" im Kapitel \"0101\" des Einzelplans \"01\".\n2. Titel \"681 01\" im Kapitel \"0101\" des Einzelplans \"01\".\n3. Titel \"684 01\" im Kapitel \"0101\" des Einzelplans \"01\".\n4. Titel \"981 03\" im Kapitel \"0101\" des Einzelplans \"01\".\n5. Titel \"421 01\" im Kapitel \"0101\" des Einzelplans \"01\".\n\nDie vollständige Liste umfasst über 1000 Titel. Wenn du eine detaillierte Analyse oder spezifische Kapitel und Einzelpläne benötigst, lass es mich wissen!",
+    "actual_answer": "Die Suche nach einem Titel, der nur im Beschluss 2024 und nicht im Entwurf enthalten ist, hat keine relevanten Informationen ergeben. Die gefundenen Seiten enthalten keine Angaben zu Unterschieden zwischen Beschluss und Entwurf.",
     "tools_used": [
-      "query_database"
+      "read_document"
     ],
-    "sql_queries": [
-      "SELECT titel, kapitel, einzelplan \nFROM haushaltsdaten \nWHERE year = 2024 AND version = 'beschluss' AND ausgaben_soll IS NOT NULL AND id NOT IN (\n    SELECT id \n    FROM haushaltsdaten \n    WHERE year = 2024 AND version = 'entwurf' AND ausgaben_soll IS NOT NULL\n)\nLIMIT 1000"
-    ],
+    "sql_queries": [],
     "sources": [
-      "SQL: 1000 Zeile(n)"
+      "read_document"
     ],
     "confidence": "high",
-    "elapsed_seconds": 9.2,
+    "elapsed_seconds": 2672.5,
     "data_available": "partial",
     "data_reason": "2024 entwurf+beschluss in DB; requires version comparison query",
     "status": "partial_data",
