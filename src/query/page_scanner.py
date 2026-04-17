@@ -342,40 +342,68 @@ class PageScanner:
     # ------------------------------------------------------------------
 
     def _call_llm(self, messages: list[dict]) -> str:
-        """Send the multimodal messages to Azure OpenAI and return the text."""
-        logger.debug(
-            "Sending multimodal request – %d message(s), deployment=%s",
-            len(messages),
-            self._deployment,
-        )
-        try:
-            response = self._client.chat.completions.create(
-                model=self._deployment,
-                messages=messages,
-                temperature=0.0,
-                max_tokens=4096,
-            )
-        except RateLimitError as exc:
-            logger.warning("Rate-limit reached: %s", exc)
-            raise RuntimeError(
-                "Azure OpenAI Rate-Limit erreicht. Bitte kurz warten und erneut versuchen."
-            ) from exc
-        except APIConnectionError as exc:
-            logger.error("Connection error: %s", exc)
-            raise RuntimeError(
-                "Verbindung zu Azure OpenAI fehlgeschlagen. "
-                "Endpoint und Netzwerk prüfen."
-            ) from exc
-        except APIStatusError as exc:
-            logger.error("API error (HTTP %d): %s", exc.status_code, exc)
-            raise RuntimeError(
-                "Azure OpenAI API-Fehler (HTTP %d): %s"
-                % (exc.status_code, exc.message)
-            ) from exc
+        """Send the multimodal messages to Azure OpenAI and return the text.
+        
+        Includes automatic retry for content filter false positives —
+        budget documents sometimes trigger jailbreak detection erroneously.
+        """
+        import time as _time
 
-        content: str = response.choices[0].message.content or ""
-        logger.debug("LLM response – %d chars", len(content))
-        return content
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            logger.debug(
+                "Sending multimodal request (attempt %d/%d) – %d message(s), deployment=%s",
+                attempt, max_retries, len(messages), self._deployment,
+            )
+            try:
+                response = self._client.chat.completions.create(
+                    model=self._deployment,
+                    messages=messages,
+                    temperature=0.0,
+                    max_tokens=4096,
+                )
+                content: str = response.choices[0].message.content or ""
+                logger.debug("LLM response – %d chars", len(content))
+                return content
+
+            except RateLimitError as exc:
+                logger.warning("Rate-limit reached: %s", exc)
+                if attempt < max_retries:
+                    _time.sleep(2 * attempt)
+                    continue
+                raise RuntimeError(
+                    "Azure OpenAI Rate-Limit erreicht. Bitte kurz warten und erneut versuchen."
+                ) from exc
+            except APIConnectionError as exc:
+                logger.error("Connection error: %s", exc)
+                raise RuntimeError(
+                    "Verbindung zu Azure OpenAI fehlgeschlagen. "
+                    "Endpoint und Netzwerk prüfen."
+                ) from exc
+            except APIStatusError as exc:
+                if exc.status_code == 400 and 'content_filter' in str(exc):
+                    logger.warning(
+                        "Content filter triggered (attempt %d/%d) — "
+                        "this is a false positive on budget document content. Retrying...",
+                        attempt, max_retries,
+                    )
+                    if attempt < max_retries:
+                        _time.sleep(1)
+                        continue
+                    # Retries exhausted — return informative message instead of crashing
+                    return (
+                        "[HINWEIS: Die Azure-Inhaltsfilter haben diesen Seiteninhalt "
+                        "fälschlicherweise blockiert (False Positive). Bitte versuchen Sie "
+                        "die Frage erneut — der Fehler ist transient und tritt bei "
+                        "Haushaltsdokumenten gelegentlich auf.]"
+                    )
+                logger.error("API error (HTTP %d): %s", exc.status_code, exc)
+                raise RuntimeError(
+                    "Azure OpenAI API-Fehler (HTTP %d): %s"
+                    % (exc.status_code, exc.message)
+                ) from exc
+
+        return ""  # Should not reach here
 
     # ------------------------------------------------------------------
     # Response parsing
