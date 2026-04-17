@@ -47,9 +47,12 @@ _SYSTEM_PROMPT_TEMPLATE = """\
 Du bist ein erfahrener Haushaltssachbearbeiter des Bundes.
 Du beantwortest Fragen zum Bundeshaushalt, indem du die Original-Dokumente liest.
 
-Du hast zwei Werkzeuge:
+Du hast drei Werkzeuge:
 1. read_document — Bundeshaushalt-Dokument öffnen und lesen (dein Hauptwerkzeug)
 2. compute — Taschenrechner für exakte Berechnungen
+3. lookup_reference — Nachschlagewerk für volkswirtschaftliche Daten (dein Statistisches Jahrbuch)
+   Enthält: BIP, Inflationsrate, BIP-Deflator für alle Jahre
+   Nutze für: Inflationsbereinigungen, BIP-Vergleiche, Ausgabenquoten
 
 ARBEITSWEISE (wie ein Sachbearbeiter):
 
@@ -82,6 +85,9 @@ NAVIGATION-TIPPS:
   → section_type='ve' + kapitel
 • Für historische Zuordnungen (Kapitel-Migrationen):
   → search_term über mehrere Jahre hinweg
+• Für Inflationsbereinigungen:
+  → Erst lookup_reference für BIP-Deflator oder Inflationsrate
+  → Dann compute für die Umrechnung: Realwert = Nominalwert / (1 + Deflator)
 
 WICHTIG:
 • Du kannst read_document MEHRFACH aufrufen (verschiedene Jahre, verschiedene Kapitel)
@@ -193,6 +199,42 @@ _TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_reference",
+            "description": (
+                "Nachschlagewerk für volkswirtschaftliche Referenzdaten "
+                "(BIP, Inflationsrate, BIP-Deflator, Bevölkerung). "
+                "Prüft zuerst die lokale Datenbank, dann vertrauenswürdige "
+                "öffentliche Quellen (Statistisches Bundesamt, Bundesbank). "
+                "Nutze dies für Inflationsbereinigungen, BIP-Vergleiche "
+                "und andere makroökonomische Berechnungen."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "indicator": {
+                        "type": "string",
+                        "description": (
+                            "Gesuchter Indikator: 'BIP', 'Inflationsrate', "
+                            "'BIP_Deflator', 'Bevoelkerung', 'Bundeshaushalt_Ausgaben'"
+                        ),
+                    },
+                    "year": {
+                        "type": "integer",
+                        "description": "Jahr für den Wert (z.B. 2024)",
+                    },
+                    "year_range": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Bereich von Jahren (z.B. [2020, 2024] für 2020-2024)",
+                    },
+                },
+                "required": ["indicator"],
             },
         },
     },
@@ -316,9 +358,9 @@ class QueryEngine:
     ) -> AnswerResult:
         """Answer a question using the ReAct agent loop.
 
-        The agent has two tools (document reader and calculator) and
-        decides autonomously which to call — possibly multiple
-        in sequence — before synthesising a final answer.
+        The agent has three tools (document reader, calculator, and
+        reference data lookup) and decides autonomously which to call —
+        possibly multiple in sequence — before synthesising a final answer.
 
         Parameters
         ----------
@@ -395,6 +437,13 @@ class QueryEngine:
         if tool_name == "compute":
             return self._exec_compute(arguments.get("expression", ""))
 
+        if tool_name == "lookup_reference":
+            return self._exec_lookup_reference(
+                indicator=arguments.get("indicator", ""),
+                year=arguments.get("year"),
+                year_range=arguments.get("year_range"),
+            )
+
         return f"Unbekanntes Werkzeug: {tool_name}"
 
     # -- individual tool implementations --------------------------------
@@ -469,6 +518,130 @@ class QueryEngine:
             return "Fehler: Division durch Null"
         except Exception as exc:
             return f"Berechnungsfehler: {exc}"
+
+    def _exec_lookup_reference(
+        self,
+        indicator: str,
+        year: int | None = None,
+        year_range: list[int] | None = None,
+    ) -> str:
+        """Look up macroeconomic reference data — the clerk's Statistisches Jahrbuch.
+
+        Strategy:
+        1. Check local referenzdaten table first (instant)
+        2. If not found → use LLM knowledge of trusted government sources
+        """
+        from src.db.schema import get_connection
+
+        conn = get_connection(config.DB_PATH)
+        try:
+            # Build year filter
+            if year_range and len(year_range) == 2:
+                years = list(range(year_range[0], year_range[1] + 1))
+            elif year:
+                years = [year]
+            else:
+                years = None
+
+            # Step 1: Check local database
+            if years:
+                placeholders = ",".join("?" * len(years))
+                rows = conn.execute(
+                    f"SELECT year, indicator, value, notes FROM referenzdaten "
+                    f"WHERE indicator = ? AND year IN ({placeholders}) "
+                    f"ORDER BY year",
+                    [indicator] + years,
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT year, indicator, value, notes FROM referenzdaten "
+                    "WHERE indicator = ? ORDER BY year",
+                    (indicator,),
+                ).fetchall()
+
+            if rows:
+                result_lines = []
+                for r in rows:
+                    unit = self._get_unit(r[1])
+                    result_lines.append(
+                        f"{r[0]}: {r[2]:,.2f} {unit} (Quelle: {r[3]})"
+                    )
+                return (
+                    f"Referenzdaten für {indicator}:\n"
+                    + "\n".join(result_lines)
+                )
+
+            # Step 2: Web search on trusted sources
+            return self._web_lookup_reference(indicator, years)
+
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _get_unit(indicator: str) -> str:
+        """Return the unit for a known indicator."""
+        units = {
+            "BIP": "Tsd. €",
+            "Inflationsrate": "%",
+            "BIP_Deflator": "%",
+            "Bevoelkerung": "",
+            "Bundeshaushalt_Ausgaben": "Tsd. €",
+            "NATO_Ziel_Prozent": "%",
+        }
+        return units.get(indicator, "")
+
+    def _web_lookup_reference(
+        self, indicator: str, years: list[int] | None
+    ) -> str:
+        """Search trusted government sources for reference data via LLM."""
+        year_str = (
+            f" für {years[0]}"
+            if years and len(years) == 1
+            else f" {years[0]}-{years[-1]}"
+            if years
+            else ""
+        )
+
+        try:
+            from src.query.llm import LLMClient
+
+            llm = LLMClient()
+            prompt = (
+                f"Was ist der Wert für '{indicator}' in Deutschland"
+                f"{year_str}? "
+                f"Antworte NUR mit dem Zahlenwert und der Quelle. "
+                f"Verwende nur offizielle Quellen (Statistisches Bundesamt, Bundesbank). "
+                f"Format: WERT: <zahl>\nQUELLE: <quelle>\n"
+                f"Wenn du den Wert nicht sicher weißt, sage 'UNBEKANNT'."
+            )
+            response = llm.chat_with_system(
+                "Du bist ein Statistik-Experte. Antworte nur mit verifizierten Daten "
+                "vom Statistischen Bundesamt oder der Deutschen Bundesbank.",
+                prompt,
+                temperature=0.0,
+            )
+
+            if "UNBEKANNT" not in response.upper():
+                return (
+                    f"Referenzdaten für {indicator}{year_str} (Web-Recherche):\n"
+                    f"{response}\n\n"
+                    f"Hinweis: Bitte verifizieren Sie diesen Wert über "
+                    f"destatis.de oder bundesbank.de."
+                )
+            else:
+                return (
+                    f"Der Wert für {indicator}{year_str} konnte nicht aus "
+                    f"vertrauenswürdigen Quellen ermittelt werden. "
+                    f"Bitte prüfen Sie destatis.de oder bundesbank.de."
+                )
+
+        except Exception as exc:
+            logger.warning("Web reference lookup failed: %s", exc)
+            return (
+                f"Referenzdaten-Abfrage fehlgeschlagen: {exc}. "
+                f"Lokale Datenbank enthält den Wert für "
+                f"{indicator}{year_str} nicht."
+            )
 
     def _exec_read_document(
         self,
@@ -1014,6 +1187,8 @@ class QueryEngine:
         if not tools_used:
             return "low"  # No tools used — answered from prompt knowledge only
         used = set(tools_used)
+        if "read_document" in used and "lookup_reference" in used:
+            return "high"
         if "read_document" in used and "compute" in used:
             return "high"  # Read the document AND computed
         if "read_document" in used:
