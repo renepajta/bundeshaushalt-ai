@@ -23,7 +23,6 @@ class Config:
     # Paths (relative to project root)
     PROJECT_ROOT: Path = _PROJECT_ROOT
     DOCS_DIR: Path = _PROJECT_ROOT / os.getenv("DOCS_DIR", "docs")
-    WIKI_DIR: Path = _PROJECT_ROOT / os.getenv("WIKI_DIR", "wiki")
     DATA_DIR: Path = _PROJECT_ROOT / os.getenv("DATA_DIR", "data")
     DB_PATH: Path = _PROJECT_ROOT / os.getenv("DATA_DIR", "data") / "bundeshaushalt.db"
 

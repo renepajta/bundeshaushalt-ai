@@ -1,7 +1,7 @@
 """CLI interface for the Bundeshaushalt Q&A application.
 
 Main entry point for ingesting budget PDFs, querying the database,
-searching the wiki, and managing the system.
+and managing the system.
 
 Usage:
     python -m src.cli <command> [options]
@@ -59,7 +59,7 @@ def _require(label: str):
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
-    """Extract, parse, load data from a PDF, and build wiki pages."""
+    """Extract, parse, and load data from a PDF."""
     from rich.progress import Progress, SpinnerColumn, TextColumn
 
     pdf_path = Path(args.pdf_path)
@@ -144,26 +144,6 @@ def cmd_ingest(args: argparse.Namespace) -> None:
             completed=True,
         )
 
-        # Step 4 — Wiki
-        task = progress.add_task("Erstelle Wiki-Seiten …", total=None)
-        try:
-            from src.wiki.builder import WikiBuilder
-            from src.wiki.indexer import WikiIndexer
-        except ImportError as exc:
-            console.print(f"[bold red]Import-Fehler:[/] wiki — {exc}")
-            raise SystemExit(1)
-
-        builder = WikiBuilder()
-        pages = builder.build_all(source_file=pdf_path.name)
-        indexer = WikiIndexer()
-        indexer.rebuild_index()
-        indexer.append_log("ingest", f"PDF={pdf_path.name}, Zeilen={sum(stats.values())}")
-        progress.update(
-            task,
-            description=f"Wiki aktualisiert — {len(pages)} Seiten erstellt/aktualisiert",
-            completed=True,
-        )
-
     # Summary table
     summary = Table(title="Ingest-Zusammenfassung", border_style="green")
     summary.add_column("Komponente", style="cyan")
@@ -176,7 +156,6 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     summary.add_row("VE", str(stats.get("verpflichtungsermachtigungen", 0)))
     summary.add_row("Sachverhalte", str(stats.get("sachverhalte", 0)))
     summary.add_row("Referenzdaten", str(ref_count))
-    summary.add_row("Wiki-Seiten", str(len(pages)))
     console.print(summary)
     console.print("[bold green]✓ Ingest abgeschlossen.[/]")
 
@@ -661,168 +640,6 @@ def _display_answer(
 
 
 # ---------------------------------------------------------------------------
-# Command: search
-# ---------------------------------------------------------------------------
-
-
-def cmd_search(args: argparse.Namespace) -> None:
-    """Search the wiki for relevant pages."""
-    term = " ".join(args.term)
-    if not term.strip():
-        console.print("[bold red]Bitte einen Suchbegriff angeben.[/]")
-        raise SystemExit(1)
-
-    _display_search(term, max_results=args.limit)
-
-
-def _display_search(term: str, max_results: int = 10) -> None:
-    """Run a wiki search and display the results."""
-    try:
-        from src.wiki.search import WikiSearch
-    except ImportError as exc:
-        console.print(f"[bold red]WikiSearch nicht verfügbar:[/] {exc}")
-        raise SystemExit(1)
-
-    ws = WikiSearch()
-    results = ws.search(term, max_results=max_results)
-
-    if not results:
-        console.print(f"[yellow]Keine Treffer für:[/] {term}")
-        return
-
-    console.print(f"\n[bold]Suchergebnisse für:[/] {term}\n")
-
-    for i, r in enumerate(results, 1):
-        rel_path = r.page_path.relative_to(config.WIKI_DIR) if \
-            r.page_path.is_relative_to(config.WIKI_DIR) else r.page_path
-        console.print(
-            Panel(
-                f"[bold]{r.title}[/bold]\n"
-                f"[dim]{rel_path}[/dim]\n\n"
-                f"{r.excerpt}",
-                title=f"#{i}  [cyan]Relevanz: {r.relevance_score:.2f}[/cyan]",
-                border_style="blue",
-                padding=(0, 1),
-            )
-        )
-
-
-# ---------------------------------------------------------------------------
-# Command: lint
-# ---------------------------------------------------------------------------
-
-
-def cmd_lint(args: argparse.Namespace) -> None:
-    """Health-check the wiki."""
-    console.print(Panel("[bold]Wiki-Gesundheitsprüfung[/]", border_style="blue"))
-
-    wiki_dir = config.WIKI_DIR
-    if not wiki_dir.exists():
-        console.print(f"[bold red]Wiki-Verzeichnis nicht gefunden:[/] {wiki_dir}")
-        raise SystemExit(1)
-
-    md_files = list(wiki_dir.rglob("*.md"))
-    special = {"index.md", "log.md"}
-    content_pages = [f for f in md_files if f.name not in special]
-
-    # Collect all internal links and page stems
-    all_stems = {f.stem for f in content_pages}
-    issues: list[str] = []
-    link_targets: set[str] = set()
-    pages_with_links: dict[str, list[str]] = {}
-
-    import re
-    link_re = re.compile(r"\[\[([^\]]+)\]\]")
-
-    for page in content_pages:
-        try:
-            text = page.read_text(encoding="utf-8")
-        except Exception:
-            issues.append(f"⚠ Kann nicht gelesen werden: {page.name}")
-            continue
-
-        links = link_re.findall(text)
-        pages_with_links[page.stem] = links
-        link_targets.update(links)
-
-    # Orphan pages (no incoming links, not index/log)
-    referenced_stems = set()
-    for targets in pages_with_links.values():
-        referenced_stems.update(targets)
-    orphans = all_stems - referenced_stems - {"index", "log", "uebersicht"}
-
-    # Missing references (links that point to non-existent pages)
-    missing = link_targets - all_stems
-
-    # DB vs wiki consistency
-    db_einzelplaene: set[str] = set()
-    try:
-        from src.db.schema import get_connection
-        conn = get_connection(config.DB_PATH)
-        rows = conn.execute(
-            "SELECT DISTINCT einzelplan FROM einzelplan_meta"
-        ).fetchall()
-        db_einzelplaene = {r[0] for r in rows}
-        conn.close()
-    except Exception:
-        pass
-
-    entity_pages = {
-        f.stem for f in content_pages if "entities" in str(f)
-    }
-    missing_entity_pages = set()
-    for ep in db_einzelplaene:
-        expected = f"einzelplan-{ep}"
-        if expected not in entity_pages:
-            missing_entity_pages.add(ep)
-
-    # Report
-    table = Table(title="Lint-Ergebnis", border_style="blue")
-    table.add_column("Prüfung", style="cyan")
-    table.add_column("Ergebnis", justify="right")
-    table.add_column("Status")
-    table.add_row(
-        "Wiki-Seiten gesamt",
-        str(len(content_pages)),
-        "[green]✓[/]",
-    )
-    table.add_row(
-        "Verwaiste Seiten (keine eingehenden Links)",
-        str(len(orphans)),
-        "[green]✓[/]" if len(orphans) == 0 else "[yellow]⚠[/]",
-    )
-    table.add_row(
-        "Fehlende Querverweise",
-        str(len(missing)),
-        "[green]✓[/]" if len(missing) == 0 else "[red]✗[/]",
-    )
-    table.add_row(
-        "EP in DB ohne Wiki-Seite",
-        str(len(missing_entity_pages)),
-        "[green]✓[/]" if len(missing_entity_pages) == 0 else "[yellow]⚠[/]",
-    )
-    console.print(table)
-
-    if orphans:
-        console.print("\n[yellow]Verwaiste Seiten:[/]")
-        for o in sorted(orphans):
-            console.print(f"  • {o}")
-
-    if missing:
-        console.print("\n[red]Fehlende Querverweise:[/]")
-        for m in sorted(missing):
-            console.print(f"  • [[{m}]]")
-
-    if missing_entity_pages:
-        console.print("\n[yellow]Einzelpläne ohne Wiki-Seite:[/]")
-        for ep in sorted(missing_entity_pages):
-            console.print(f"  • Einzelplan {ep}")
-
-    if not orphans and not missing and not missing_entity_pages:
-        console.print("\n[bold green]✓ Wiki ist konsistent.[/]")
-
-
-# ---------------------------------------------------------------------------
 # Command: status
 # ---------------------------------------------------------------------------
 
@@ -863,27 +680,6 @@ def cmd_status(args: argparse.Namespace) -> None:
 
     console.print(db_table)
 
-    # Wiki stats
-    wiki_dir = config.WIKI_DIR
-    wiki_table = Table(title="Wiki", border_style="green")
-    wiki_table.add_column("Kategorie", style="cyan")
-    wiki_table.add_column("Seiten", justify="right")
-
-    if wiki_dir.exists():
-        for category in ("entities", "concepts", "analyses"):
-            cat_dir = wiki_dir / category
-            if cat_dir.exists():
-                count = len(list(cat_dir.glob("*.md")))
-                wiki_table.add_row(category, str(count))
-            else:
-                wiki_table.add_row(category, "0")
-        special = sum(1 for f in wiki_dir.glob("*.md"))
-        wiki_table.add_row("root (index, log, …)", str(special))
-    else:
-        wiki_table.add_row("[dim]—[/]", "[dim]Wiki existiert nicht[/]")
-
-    console.print(wiki_table)
-
     # Source PDFs
     docs_dir = config.DOCS_DIR
     pdf_table = Table(title="Quelldokumente", border_style="green")
@@ -903,24 +699,8 @@ def cmd_status(args: argparse.Namespace) -> None:
 
     console.print(pdf_table)
 
-    # Last log entries
-    log_path = wiki_dir / "log.md"
-    if log_path.exists():
-        try:
-            lines = log_path.read_text(encoding="utf-8").splitlines()
-            table_lines = [l for l in lines if l.startswith("|") and "---" not in l]
-            # skip header row
-            data_lines = [l for l in table_lines if "Zeitstempel" not in l]
-            if data_lines:
-                console.print("\n[bold]Letzte Aktivitäten:[/]")
-                for line in data_lines[-5:]:
-                    console.print(f"  {line.strip()}")
-        except Exception:
-            pass
-
     # Paths summary
     console.print(f"\n[dim]DB:   {db_path}[/]")
-    console.print(f"[dim]Wiki: {wiki_dir}[/]")
     console.print(f"[dim]Docs: {docs_dir}[/]")
 
 
@@ -956,7 +736,6 @@ def cmd_interactive(args: argparse.Namespace) -> None:
             "Stellen Sie Fragen zum Bundeshaushalt.\n"
             "Befehle:\n"
             "  [cyan]!sql <query>[/]    — SQL direkt ausführen\n"
-            "  [cyan]!search <term>[/]  — Wiki durchsuchen\n"
             "  [cyan]!history[/]        — Gesprächsverlauf anzeigen\n"
             "  [cyan]!clear[/]          — Gesprächsverlauf löschen\n"
             "  [cyan]quit / exit[/]     — Beenden",
@@ -1002,10 +781,6 @@ def cmd_interactive(args: argparse.Namespace) -> None:
             _interactive_sql(question[5:].strip())
             continue
 
-        if question.startswith("!search "):
-            _display_search(question[8:].strip())
-            continue
-
         if question.lower() == "!history":
             if not conversation_history:
                 console.print("[dim]Noch kein Gesprächsverlauf.[/]")
@@ -1035,7 +810,7 @@ def cmd_interactive(args: argparse.Namespace) -> None:
         if not engine_available:
             console.print(
                 "[yellow]QueryEngine nicht verfügbar. "
-                "Verwende !sql oder !search.[/]"
+                "Verwende !sql.[/]"
             )
             continue
 
@@ -1149,22 +924,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_query.add_argument("question", nargs="+", help="Frage in natürlicher Sprache")
 
-    # search
-    p_search = subparsers.add_parser(
-        "search",
-        help="Wiki nach relevanten Seiten durchsuchen",
-    )
-    p_search.add_argument("term", nargs="+", help="Suchbegriff")
-    p_search.add_argument(
-        "--limit",
-        type=int,
-        default=10,
-        help="Maximale Anzahl Ergebnisse (Standard: 10)",
-    )
-
-    # lint
-    subparsers.add_parser("lint", help="Wiki-Gesundheitsprüfung durchführen")
-
     # status
     subparsers.add_parser("status", help="Systemstatus anzeigen")
 
@@ -1235,8 +994,6 @@ _COMMANDS = {
     "ingest": cmd_ingest,
     "ingest-all": cmd_ingest_all,
     "query": cmd_query,
-    "search": cmd_search,
-    "lint": cmd_lint,
     "status": cmd_status,
     "download": cmd_download,
     "interactive": cmd_interactive,

@@ -156,9 +156,8 @@ bundeshaushalt-ai/
 ├── tests/
 │   ├── golden_qa.json            # 16 expert-validated test questions
 │   └── run_golden_qa.py          # Automated evaluation with fuzzy scoring
-├── docs/
-│   └── ARCHITECTURE.md           # Detailed technical architecture
-└── wiki/                         # Generated knowledge pages per Einzelplan
+└── docs/
+    └── ARCHITECTURE.md           # Detailed technical architecture
 ```
 
 ---

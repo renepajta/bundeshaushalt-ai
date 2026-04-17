@@ -2,7 +2,7 @@
 
 Covers:
   1. Unit tests — German number parsing, SQL validation (no external deps)
-  2. Module integration — SQLite schema, wiki search, PDF extraction
+  2. Module integration — SQLite schema, PDF extraction
   3. Golden Q&A structure validation
   4. End-to-end smoke tests (skipped when PDF / API unavailable)
 """
@@ -280,52 +280,6 @@ class TestDataLoader(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(bip, "BIP 2025 should be in reference data")
         self.assertGreater(bip[0], 0)
-
-
-class TestWikiSearch(unittest.TestCase):
-    """Test wiki search functionality."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.wiki_dir = config.WIKI_DIR
-        if not cls.wiki_dir.exists() or not list(cls.wiki_dir.rglob("*.md")):
-            raise unittest.SkipTest("Wiki directory is empty or missing")
-        from src.wiki.search import WikiSearch
-        cls.ws = WikiSearch(wiki_dir=cls.wiki_dir)
-
-    def test_search_finds_concept_pages(self):
-        results = self.ws.search("Verrechnungstitel")
-        self.assertGreater(len(results), 0, "Should find results for Verrechnungstitel")
-        titles = [r.title.lower() for r in results]
-        self.assertTrue(
-            any("verrechnungstitel" in t for t in titles),
-            f"Expected a Verrechnungstitel page in results, got: {titles}",
-        )
-
-    def test_search_returns_excerpts(self):
-        results = self.ws.search("Flexibilisierung")
-        if results:
-            self.assertTrue(len(results[0].excerpt) > 0, "Excerpt should not be empty")
-
-    def test_search_returns_scores(self):
-        results = self.ws.search("Deckungsfähigkeit")
-        if results:
-            self.assertGreater(results[0].relevance_score, 0)
-
-    def test_search_empty_query(self):
-        results = self.ws.search("")
-        self.assertEqual(results, [])
-
-    def test_get_context_for_query(self):
-        ctx = self.ws.get_context_for_query("Was sind Verrechnungstitel?", max_chars=2000)
-        self.assertIsInstance(ctx, str)
-        # If wiki has the page, context should contain something
-        if self.ws.search("Verrechnungstitel"):
-            self.assertGreater(len(ctx), 0, "Context should not be empty for known topic")
-
-    def test_search_respects_max_results(self):
-        results = self.ws.search("Haushalt", max_results=2)
-        self.assertLessEqual(len(results), 2)
 
 
 # ===================================================================

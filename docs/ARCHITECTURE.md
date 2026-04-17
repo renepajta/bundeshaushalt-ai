@@ -1,8 +1,8 @@
 # Bundeshaushalt Q&A — Architecture Documentation
 
 > A Retrieval-Augmented Generation (RAG) system for querying the German federal
-> budget (*Bundeshaushalt*) using natural language. Built with Azure OpenAI,
-> SQLite, and a custom knowledge wiki.
+> budget (*Bundeshaushalt*) using natural language. Built with Azure OpenAI
+> and SQLite.
 
 ---
 
@@ -15,7 +15,6 @@ sourced answers. It combines three data access strategies:
 | Strategy | Purpose | Example Question |
 |----------|---------|-----------------|
 | **SQL Database** | Exact financial figures, aggregations, comparisons | *"Wie hoch sind die Ausgaben des Einzelplans 14 im Jahr 2026?"* |
-| **Knowledge Wiki** | Conceptual explanations, terminology, background | *"Was ist ein Verrechnungstitel?"* |
 | **PDF Page Scanner** | Visual table analysis directly from source PDFs | *"Welche Tabellen stehen auf Seite 42?"* |
 
 A **ReAct agent** (Reasoning + Acting) powered by **GPT-4o** via Azure OpenAI
@@ -46,20 +45,13 @@ bundeshaushalt-ai/
 │   │   ├── llm.py              # Azure OpenAI client (chat, SQL gen, synthesis)
 │   │   ├── sql_agent.py        # NL→SQL translation + execution + retry
 │   │   └── page_scanner.py     # Multimodal PDF page analysis (text + images)
-│   │
-│   └── wiki/                   # Knowledge wiki layer
-│       ├── builder.py          # Generates Markdown wiki pages from DB
-│       ├── indexer.py          # Maintains index.md and log.md
-│       └── search.py           # BM25-style keyword search with German NLP
 │
 ├── scripts/
 │   └── download_budgets.py     # Playwright-based PDF scraper
 │
 ├── data/                       # Runtime data (DB, downloaded PDFs)
 ├── docs/                       # Source budget PDFs
-├── wiki/                       # Generated knowledge wiki (Markdown)
 ├── tests/                      # Test suite
-├── SCHEMA.md                   # Wiki structure definition (in German)
 └── requirements.txt            # Python dependencies
 ```
 
@@ -75,13 +67,8 @@ bundeshaushalt-ai/
 │  │  Budget   │───▶│ PDFExtractor │───▶│ BudgetParser │───▶│SQLite │ │
 │  │  PDF      │    │ (PyMuPDF +   │    │ (regex-based │    │  DB   │ │
 │  │  (docs/)  │    │  pdfplumber) │    │  structure   │    │       │ │
-│  └──────────┘    └──────────────┘    │  recognition)│    └───┬───┘ │
-│                                      └──────────────┘        │     │
-│                                                              ▼     │
-│                                                        ┌──────────┐│
-│                                                        │WikiBuilder││
-│                                                        │→ wiki/   ││
-│                                                        └──────────┘│
+│  └──────────┘    └──────────────┘    │  recognition)│    └───────┘ │
+│                                      └──────────────┘              │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -93,21 +80,13 @@ bundeshaushalt-ai/
 │  └──────────┘    │   │     OpenAI Function Calling Loop    │    │   │
 │                  │   │                                      │    │   │
 │                  │   │  ┌─────────────┐ ┌──────────────┐   │    │   │
-│                  │   │  │search_wiki  │ │query_database│   │    │   │
-│                  │   │  │(WikiSearch) │ │(SQLAgent)    │   │    │   │
+│                  │   │  │read_document│ │query_database│   │    │   │
+│                  │   │  │(PageScanner)│ │(SQLAgent)    │   │    │   │
 │                  │   │  └──────┬──────┘ └──────┬───────┘   │    │   │
 │                  │   │         │                │           │    │   │
 │                  │   │  ┌──────┴──────┐ ┌──────┴───────┐   │    │   │
-│                  │   │  │ wiki/*.md   │ │ SQLite DB    │   │    │   │
+│                  │   │  │ Budget PDF  │ │ SQLite DB    │   │    │   │
 │                  │   │  └─────────────┘ └──────────────┘   │    │   │
-│                  │   │                                      │    │   │
-│                  │   │  ┌─────────────┐                    │    │   │
-│                  │   │  │read_document│                    │    │   │
-│                  │   │  │(PageScanner)│                    │    │   │
-│                  │   │  └──────┬──────┘                    │    │   │
-│                  │   │         │                           │    │   │
-│                  │   │  ┌──────┴──────┐                    │    │   │
-│                  │   │  │ Budget PDF  │                    │    │   │
 │                  │   │  │ (images)    │                    │    │   │
 │                  │   │  └─────────────┘                    │    │   │
 │                  │   └────────────────────────────────────┘    │   │
@@ -180,21 +159,6 @@ loads **reference data** (GDP, inflation rates, NATO targets) via
 The database schema is defined in `src/db/schema.py` and initialised via
 `init_db()` with WAL journal mode, foreign keys, and a 5-second busy timeout.
 
-### 4.4  Wiki Generation (`src/wiki/builder.py`)
-
-The `WikiBuilder` queries the populated database and generates Markdown pages
-in three categories:
-
-| Category | Directory | Content |
-|----------|-----------|---------|
-| **Entities** | `wiki/entities/` | Einzelplan and Kapitel profiles with financial summaries |
-| **Concepts** | `wiki/concepts/` | Budget terminology explanations (Verrechnungstitel, Flexibilisierung, etc.) |
-| **Analyses** | `wiki/analyses/` | Comparative analyses and trend reports |
-
-Each page has YAML frontmatter (`title`, `type`, `years`, `tags`) for
-structured indexing. The `WikiIndexer` then rebuilds `wiki/index.md` (a catalog
-of all pages) and appends to `wiki/log.md` (an activity log).
-
 ---
 
 ## 5  Query Execution Flow
@@ -206,7 +170,7 @@ This is the heart of the application. When a user asks a question, the
 
 The agent uses the **Reasoning + Acting** pattern:
 1. **Reason** — The LLM analyses the question and decides what action to take
-2. **Act** — The LLM calls a tool (wiki search, SQL query, or page scan)
+2. **Act** — The LLM calls a tool (document read, SQL query, or page scan)
 3. **Observe** — The tool result is fed back into the conversation
 4. **Repeat** — The LLM decides whether to call another tool or produce a final answer
 
@@ -266,17 +230,10 @@ This loop continues until the model produces a response **without** tool calls
 
 ### 5.3  The Three Tools
 
-#### `search_wiki` — Knowledge Retrieval (RAG)
+#### `read_document` — Document Navigation & Reading
 
-| Aspect | Detail |
-|--------|--------|
-| **Input** | `query` — a search term or question |
-| **Implementation** | `WikiSearch.get_context_for_query()` |
-| **Search method** | BM25-style scoring with German-aware tokenisation |
-| **Features** | Umlaut normalisation (ä→ae), stop-word removal, substring matching for compound words |
-| **Scoring zones** | Title (4×), Tags (3×), Headings (2×), Body (1×) |
-| **Output** | Concatenated Markdown content from top wiki pages (≤4000 chars) |
-| **Use case** | Terminology, background, qualitative context |
+The primary tool. Navigates and reads budget documents using PDF bookmarks,
+FTS5 search, and multimodal page scanning.
 
 #### `query_database` — Text-to-SQL
 
@@ -352,7 +309,6 @@ The SQL generation pipeline in `SQLAgent` works as follows:
 
 After all tool calls complete, GPT-4o synthesises the final answer considering:
 - SQL query results (precise numbers)
-- Wiki context (background and explanations)
 - Page scan findings (visual table data)
 - Conversation history (for follow-up questions)
 
@@ -396,7 +352,7 @@ The ReAct pattern interleaves reasoning traces and task-specific actions. Unlike
 simple prompt→response flows, the agent can:
 
 - **Observe** intermediate results before deciding the next step
-- **Chain** multiple tool calls (e.g. two SQL queries then a wiki lookup)
+- **Chain** multiple tool calls (e.g. two SQL queries then a page scan)
 - **Recover** from tool errors (SQL retry, fallback to page scan)
 - **Self-terminate** when it has sufficient information
 
@@ -428,20 +384,7 @@ This rich context allows the model to generate correct SQL even for
 domain-specific queries involving German column names, Tausend-Euro units,
 and the Einzelplan/Kapitel/Titel hierarchy.
 
-### 6.4  RAG (Retrieval-Augmented Generation) via Wiki Search
-
-The wiki acts as a **knowledge base** that grounds LLM responses in
-domain-specific facts. The search pipeline:
-
-1. **Tokenise** the query with German-aware processing (umlauts, stop words)
-2. **Score** each wiki page using BM25-style relevance (weighted by zone)
-3. **Retrieve** the top pages and concatenate their content
-4. **Inject** this context into the LLM conversation
-
-This prevents hallucination for conceptual questions and provides source
-citations.
-
-### 6.5  Multimodal Page Scanning as Fallback
+### 6.4  Multimodal Page Scanning as Fallback
 
 Budget PDFs contain complex tables where:
 - Text extraction may misalign columns
@@ -515,12 +458,10 @@ All commands are invoked via `python -m src.cli <command>`.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `ingest <pdf>` | Full pipeline: extract → parse → load DB → build wiki | `ingest docs/0350-25.pdf --reset` |
+| `ingest <pdf>` | Full pipeline: extract → parse → load DB | `ingest docs/0350-25.pdf --reset` |
 | `query <question>` | Ask a question (uses ReAct agent) | `query "Ausgaben EP 14 im Jahr 2026?"` |
-| `search <term>` | Search the wiki (keyword search) | `search Verrechnungstitel --limit 5` |
-| `interactive` | Interactive Q&A mode with conversation memory | Supports `!sql`, `!search`, `!history`, `!clear` |
-| `status` | Show system status (DB rows, wiki pages, PDFs) | |
-| `lint` | Wiki health check (orphans, broken links, coverage) | |
+| `interactive` | Interactive Q&A mode with conversation memory | Supports `!sql`, `!history`, `!clear` |
+| `status` | Show system status (DB rows, PDFs) | |
 | `download` | Download budget PDFs from bundeshaushalt.de | `download --year 2026 --list-only` |
 
 ### Interactive Mode Commands
@@ -528,7 +469,6 @@ All commands are invoked via `python -m src.cli <command>`.
 | Command | Action |
 |---------|--------|
 | `!sql <query>` | Execute raw SQL against the database |
-| `!search <term>` | Search the wiki |
 | `!history` | Show conversation history |
 | `!clear` | Clear conversation history |
 | `quit` / `exit` | Exit interactive mode |
@@ -546,7 +486,6 @@ All commands are invoked via `python -m src.cli <command>`.
 | `AZURE_OPENAI_API_VERSION` | No | `2024-12-01-preview` | API version |
 | `AZURE_OPENAI_DEPLOYMENT` | No | `gpt-4o` | Model deployment name |
 | `DOCS_DIR` | No | `docs` | Directory for source PDFs |
-| `WIKI_DIR` | No | `wiki` | Directory for wiki pages |
 | `DATA_DIR` | No | `data` | Directory for database and downloads |
 
 ### Azure OpenAI via APIM

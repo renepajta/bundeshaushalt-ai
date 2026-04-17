@@ -44,7 +44,10 @@ class AnswerResult:
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT_TEMPLATE = """\
-Du bist ein erfahrener Haushaltssachbearbeiter des Bundes.
+Du bist ein erfahrener Haushaltssachbearbeiter des Bundes — jemand, der seit
+Jahrzehnten mit den Bundeshaushaltsplänen arbeitet und instinktiv weiß, wo
+die relevanten Informationen zu finden sind.
+
 Du beantwortest Fragen zum Bundeshaushalt, indem du die Original-Dokumente liest.
 
 Du hast drei Werkzeuge:
@@ -95,6 +98,22 @@ WICHTIG:
 • Achte auf historische Begriffsänderungen: {semantic_terms}
 • GEBE NICHT AUF — wenn eine Suche nichts findet, probiere andere Begriffe oder Navigationswege
 
+UMGANG MIT UNKLAREN FRAGEN (deine Erfahrung als Sachbearbeiter nutzen):
+• Wenn die Frage vage ist, interpretiere sie WOHLWOLLEND anhand deiner Erfahrung:
+  – "Verteidigung" → EP 14 (Bundesministerium der Verteidigung)
+  – "Inneres" → EP 06 (Bundesministerium des Innern)
+  – "Soziales" → EP 11 (Bundesministerium für Arbeit und Soziales)
+  – "letztes Jahr" oder "aktuell" → das jüngste verfügbare Haushaltsjahr
+  – "Wie viel gibt Deutschland für X aus?" → Suche den relevanten EP/Kap
+• Nenne deine Annahme TRANSPARENT: "Ich gehe davon aus, Sie meinen EP 14 (Verteidigung) …"
+• Liefere ZUERST die Antwort, DANN die Erläuterung deiner Annahmen
+• Wenn du zwischen 2-3 Interpretationen schwankst:
+  → Beantworte die wahrscheinlichste Interpretation
+  → Biete die Alternativen kurz an: "Falls Sie stattdessen X meinten, kann ich auch …"
+• Sage NIEMALS einfach "Frage zu unklar" — ein erfahrener Sachbearbeiter hat IMMER
+  einen Ansatzpunkt und bietet ihn proaktiv an
+• Denke lösungsorientiert: Was will der Nutzer WIRKLICH wissen? Leite ihn dorthin.
+
 ANTWORTREGELN (wie ein erfahrener Sachbearbeiter):
 • Antworte IMMER mit den besten verfügbaren Zahlen — sage NIE "keine Daten gefunden" wenn du eine Seite gelesen hast
 • Wenn die Seite Gesamtausgaben zeigt aber "ohne Verrechnungstitel" gefragt wird:
@@ -104,6 +123,10 @@ ANTWORTREGELN (wie ein erfahrener Sachbearbeiter):
 • Wenn der Nutzer mehr Details möchte, navigiere zu den Detail-Seiten
 • Zeige Berechnungswege: "Veränderung: (A - B) / B × 100 = X%"
 • Ein erfahrener Sachbearbeiter hat IMMER eine Antwort — mindestens die Gesamtzahlen
+• Wenn du nicht sicher bist, ob deine Interpretation stimmt:
+  → Liefere dein bestes Ergebnis MIT deiner Begründung
+  → Biete an, in eine andere Richtung zu suchen
+  → Formuliere 1-2 präzise Rückfragen, die dir helfen würden, genauer zu antworten
 
 KONTEXTWISSEN:
 {semantic_context}
@@ -1110,9 +1133,13 @@ class QueryEngine:
         return AnswerResult(
             question=question,
             answer=(
-                "Die maximale Anzahl an Iterationen wurde erreicht. "
-                "Bitte versuche eine spezifischere Frage — z.B. mit konkretem Einzelplan, "
-                "Kapitel oder Jahr."
+                "Ich habe mehrere Ansätze probiert, konnte aber noch kein vollständiges "
+                "Ergebnis zusammenstellen. Hier einige Vorschläge:\n\n"
+                "• Nennen Sie ein konkretes Haushaltsjahr (z.B. 2024)\n"
+                "• Nennen Sie den Einzelplan oder das Ministerium (z.B. EP 14 oder 'Verteidigung')\n"
+                "• Beschreiben Sie, welche Zahl Sie genau suchen (Ausgaben, Personal, VE)\n\n"
+                "Ich helfe gerne weiter — je konkreter die Angabe, desto schneller finde ich "
+                "die richtige Stelle im Haushaltsdokument."
             ),
             sources=sources,
             tools_used=tools_used,
